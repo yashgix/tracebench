@@ -7,7 +7,7 @@ import os
 from . import __version__
 from .baselines import AGENT_NAMES, make_agent
 from .inject import inject, validate_fault
-from .model import load_scenario
+from .model import parse_scenario
 from .replay import replay
 from .report import breakdown
 from .score import brier, noise_score, score
@@ -152,12 +152,7 @@ def load_suite(path):
             f"scenario changed: expected {suite['scenario_sha256']}, "
             f"got {scenario_sha256}"
         )
-    try:
-        scenario = load_scenario(scenario_path)
-    except OSError as exc:
-        raise ValueError(
-            f"cannot read scenario {suite['scenario']!r}: {exc}"
-        ) from None
+    scenario = parse_scenario(scenario_raw, scenario_path)
     for case in suite["cases"]:
         validate_fault(scenario, case)
 

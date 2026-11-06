@@ -5,6 +5,7 @@ import json
 import os
 import tempfile
 import unittest
+from unittest import mock
 
 from replaykit.suite import load_suite, run_pinned
 
@@ -177,6 +178,26 @@ class LoadSuiteTest(unittest.TestCase):
         with self.assertRaises(ValueError) as caught:
             load_suite(path)
         self.assertTrue(str(caught.exception).startswith("scenario changed"))
+
+    def test_scenario_replaced_after_hashing_is_not_evaluated(self):
+        path = self.write_suite()
+        replacement = write_json(self.tmp.name, "b.json", dict(SCENARIO, id="scn-b"))
+        real_open = open
+        opened = []
+
+        # Swap the file on disk right after its first open, as a concurrent editor would.
+        def open_then_replace(file, *args, **kwargs):
+            handle = real_open(file, *args, **kwargs)
+            if file == self.scenario_path and not opened:
+                opened.append(file)
+                os.replace(replacement, self.scenario_path)
+            return handle
+
+        expected_sha = sha256(self.scenario_path)
+        with mock.patch("builtins.open", open_then_replace):
+            loaded = load_suite(path)
+        self.assertEqual(loaded["scenario"]["id"], "scn-suite")
+        self.assertEqual(loaded["scenario_sha256"], expected_sha)
 
 
 class RunPinnedTest(unittest.TestCase):
