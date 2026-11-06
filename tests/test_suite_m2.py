@@ -119,6 +119,13 @@ class LoadSuiteTest(unittest.TestCase):
                     suite_body(sha256(self.scenario_path), scenario=value)
                 )
 
+    def test_rejects_absolute_scenario_path(self):
+        suite = suite_body(sha256(self.scenario_path), scenario=self.scenario_path)
+        path = write_json(self.tmp.name, "suite.json", suite)
+        with self.assertRaises(ValueError) as caught:
+            load_suite(path)
+        self.assertIn("relative", str(caught.exception))
+
     def test_rejects_bad_scenario_sha_format(self):
         for value in ("0" * 63, "A" * 64, "g" * 64, "", 5, "a" * 65):
             with self.subTest(value=value):
@@ -185,7 +192,7 @@ class LoadSuiteTest(unittest.TestCase):
         real_open = open
         opened = []
 
-        # Swap the file on disk right after its first open, as a concurrent editor would.
+        # Replace the file right after its first open, as a concurrent editor would.
         def open_then_replace(file, *args, **kwargs):
             handle = real_open(file, *args, **kwargs)
             if file == self.scenario_path and not opened:

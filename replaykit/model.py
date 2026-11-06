@@ -124,7 +124,7 @@ def validate_scenario(scenario):
 
 
 def parse_scenario(raw, path):
-    """Validate scenario bytes read from *path* and return them, events sorted by (t, id)."""
+    """Parse and validate scenario bytes read from *path*, events sorted by (t, id)."""
     try:
         scenario = json.loads(raw.decode("utf-8"))
     except (json.JSONDecodeError, UnicodeDecodeError) as exc:

@@ -91,6 +91,8 @@ def _validate_suite_shape(suite):
         raise ValueError("suite id must be a non-empty string")
     if not isinstance(suite["scenario"], str) or not suite["scenario"]:
         raise ValueError("suite scenario must be a non-empty string")
+    if os.path.isabs(suite["scenario"]):
+        raise ValueError("suite scenario must be a relative path")
     sha = suite["scenario_sha256"]
     if (
         not isinstance(sha, str)

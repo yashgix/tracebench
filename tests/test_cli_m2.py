@@ -131,6 +131,15 @@ class SuiteCommandTest(unittest.TestCase):
         self.assertEqual(stdout, "")
         self.assertIn("scenario changed", stderr)
 
+    def test_absolute_scenario_path_exits_2(self):
+        suite = dict(self.suite, scenario=self.scenario_path)
+        path = write_json(self.tmp.name, "absolute.json", suite)
+        code, stdout, stderr = call_main("suite", path)
+        self.assertEqual(code, 2)
+        self.assertEqual(stdout, "")
+        self.assertTrue(stderr.startswith("error: "))
+        self.assertIn("relative", stderr)
+
     def test_unknown_suite_agent_exits_2(self):
         suite = dict(self.suite, agents=["oracle"])
         path = write_json(self.tmp.name, "bad-agents.json", suite)
