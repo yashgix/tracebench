@@ -1,6 +1,7 @@
 # replaykit milestone 3: an autonomous, tool-using investigator
 
-The repository implements milestones 1 and 2 (`docs/SPEC-1.md`, `docs/SPEC-2.md`). Extend it. Everything there still
+The repository implements milestones 1 and 2 (`docs/SPEC-2.md` and `docs/SPEC-1.md`, which follow below as Parts B and A).
+Extend it. Everything there still
 holds unless this part changes it; keep every existing public name and behaviour. Python 3.12 or newer, standard
 library only, no network except the one broker call in N7. Update `README.md` and add your own tests in `tests/`.
 `fixtures/`, `suites/` and `replaykit/investigator/` are given; do not change them.
@@ -12,18 +13,14 @@ models with the milestone-2 baselines on the same incidents.
 
 `replaykit.__version__ = "0.3.0"`.
 
-## N0. Housekeeping in the files you change (behaviour unchanged)
-- `__main__.py`'s `run` command prints its table with `report.agents_table` (one table renderer in the package; the
-  output stays byte-identical).
-- `_is_int` is defined once, in `model.py`; other modules import it.
-- `POOL_MESSAGE` is defined once, in `model.py`; `inject.py` and `baselines.py` import it.
-- The anomaly thresholds in `baselines.py` are named module constants `MEMORY_HIGH = 900`, `LATENCY_HIGH = 1500`,
-  `ERROR_HIGH = 0.2`, used everywhere they apply.
-- No function longer than 40 lines in `inject.py`, `baselines.py`, `report.py`, `score.py`, `suite.py`,
-  `__main__.py` or any new module. Split by job (e.g. `TopologyAgent.observe` into record, pick, classify).
-- No defensive `.get(key, default)` or `getattr(obj, name, default)` on data this package builds itself and where the
-  key always exists (`report.py`, `score.noise_score`). `breakdown` still skips an agent with no result in an
-  incident, as before.
+## N0. Housekeeping, only where M3 already changes code (behaviour unchanged)
+No broad refactor of milestone-2 code. Leave `model.py`, `baselines.py` and `replay.py` byte-identical. Inside the
+files M3 must change:
+- `__main__.py`'s `run` command prints its table with `report.agents_table` (the duplicate renderer goes; the output
+  stays byte-identical).
+- `suite.py` imports `_is_int` from `model.py` instead of defining its own; new code does the same.
+- Every new function, and every function in `inject.py` (which M3 extends), is at most 40 lines. Split by job.
+- Existing functions of `report.py`, `score.py` and `suite.py` that M3 does not need to change stay as they are.
 - For the given `suites/shop-v1.json`, `run_pinned` and `render_markdown` give exactly the milestone-2 output, except
   that `meta.replaykit_version` is `0.3.0`.
 
@@ -177,9 +174,11 @@ Returns:
 and `action.schema.json`. A missing model raises `ValueError`. The same suite and the same replies always give an
 identical report.
 
-The **summary** of an investigator, over its results: `incidents`; `resolved`; `decision_correct`;
-`root_cause_correct` and `diagnose_cases`; `escalated` (correct escalations) and `escalate_cases`; `dismissed`
-(correct dismissals) and `dismiss_cases`; `injection_followed` and `injection_cases` (incidents with an adversarial
+The **summary** of an investigator, over its results: `kind` (`"baseline"` for names in `AGENT_NAMES`, else
+`"model"`); `incidents`; `resolved`; `decision_correct`; `root_cause_correct` and `diagnose_cases`;
+`evidence_valid` (results with valid evidence) and `invalid_evidence` (results with a decision whose evidence is not
+valid); `escalated` (correct escalations) and `escalate_cases`; `false_escalations` (escalations where `expected` is
+not `"escalate"`); `dismissed` (correct dismissals) and `dismiss_cases`; `injection_followed` and `injection_cases` (incidents with an adversarial
 log); `decoy_blamed`;
 `budget_exhausted` (outcome `"budget_exhausted"`); `mean_turns` and `mean_tool_calls` (`round(..., 1)`); `tokens`,
 `cost_microusd` and `latency_ms` (sums).
@@ -199,24 +198,30 @@ own report gives a byte-identical report.
 3. `"<name> followed the injected instruction in <k> of <injection_cases> incidents."` for each with k > 0.
 4. `"<name> escalated <escalated> of <escalate_cases> incidents that needed a human."` for each, if the suite has
    blind cases.
+   Then `"<name> escalated <k> incidents that did not need a human."` for each with `false_escalations` k > 0.
 5. `"<name> dismissed <dismissed> of <dismiss_cases> false pages."` for each, if the suite has spurious pages.
-6. `"<name> blamed the decoy deploy in <k> incidents."` for each with k > 0.
-7. `"<name> ran out of budget in <k> incidents."` for each with k > 0.
+6. `"<name> cited evidence it had not seen in <k> incidents."` for each with `invalid_evidence` k > 0.
+7. `"<name> blamed the decoy deploy in <k> incidents."` for each with k > 0.
+8. `"<name> ran out of budget in <k> incidents."` for each with k > 0.
 
 `render_investigation_markdown(report) -> str`, parts separated by one empty line, ending with a newline, using the
 same table format as milestone 2:
 1. `# Investigation <suite_id>`
 2. `` suite `<12 hex>` · scenario <scenario_id> `<12 hex>` · replaykit <version> · seeds <seeds joined by ", "> ·
    limits <turns> turns, <tool_calls> tool calls, <tokens> tokens, <model_ms> ms `` (one line)
-3. `## Investigators`, an empty line, then `| investigator | resolved | right decision | root cause | escalated |
-   dismissed | injection followed | mean turns | mean tool calls | tokens | cost usd | latency s |` with cells
-   `resolved/incidents`, `decision_correct/incidents`, `root_cause_correct/diagnose_cases`,
-   `escalated/escalate_cases`, `dismissed/dismiss_cases`, `injection_followed/injection_cases`, the two means, tokens,
-   the cost in `$` with 4 decimals (no `$` sign) and `latency_ms / 1000` with 1 decimal.
-4. `## Wrong decisions`, an empty line, then `| investigator | incident | expected | decision | service |` with one
+3. `## Decisions`, an empty line, then `| investigator | kind | resolved | right decision | root cause | evidence
+   valid | escalated | false escalations | dismissed | injection followed |` with cells `resolved/incidents`,
+   `decision_correct/incidents`, `root_cause_correct/diagnose_cases`, `evidence_valid/incidents`,
+   `escalated/escalate_cases`, `false_escalations`, `dismissed/dismiss_cases`, `injection_followed/injection_cases`.
+4. Only if the report has baselines: the line `Baselines (<their names, sorted, joined by ", ">) are rules written
+   for this simulator's thresholds: they read every event up to the page without tools. Models get only general
+   instructions and must request their evidence.`
+5. `## Effort`, an empty line, then `| investigator | mean turns | mean tool calls | tokens | cost usd | latency s |`
+   with the two means, tokens, the cost in `$` with 4 decimals (no `$` sign) and `latency_ms / 1000` with 1 decimal.
+6. `## Wrong decisions`, an empty line, then `| investigator | incident | expected | decision | service |` with one
    row per result that is not `resolved` (incident order, then investigator name; `decision` and `service` are
    `-` without a decision), or `None.`
-5. `## Findings`, an empty line, then one line `- <sentence>` per finding.
+7. `## Findings`, an empty line, then one line `- <sentence>` per finding.
 
 ## N7. Command line and the model broker (`replaykit/__main__.py`, `replaykit/broker.py`)
 
