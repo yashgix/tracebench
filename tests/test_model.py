@@ -249,7 +249,7 @@ class FaultTypesTest(unittest.TestCase):
     def test_fault_types_tuple(self):
         self.assertEqual(
             FAULT_TYPES,
-            ("bad_deploy", "config_error", "dependency_timeout", "memory_leak"),
+            ("bad_deploy", "config_error", "dependency_timeout", "memory_leak", "pool_exhaustion"),
         )
 
 

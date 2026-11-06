@@ -3,7 +3,13 @@
 import json
 from dataclasses import dataclass
 
-FAULT_TYPES = ("bad_deploy", "config_error", "dependency_timeout", "memory_leak")
+FAULT_TYPES = (
+    "bad_deploy",
+    "config_error",
+    "dependency_timeout",
+    "memory_leak",
+    "pool_exhaustion",
+)
 
 EVENT_KINDS = ("metric", "log", "deploy", "alert")
 METRIC_NAMES = ("error_rate", "latency_ms", "memory_mb")
