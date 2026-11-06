@@ -342,9 +342,11 @@ class InjectedIdsTest(unittest.TestCase):
             for e in incident.events
             if e["kind"] == "metric" and e["service"] == "db" and e["t"] >= 120
         ]
-        self.assertEqual(len([e for e in target_metrics if e["attrs"]["name"] == "memory_mb"]), 19)
+        memory = [e for e in target_metrics if e["attrs"]["name"] == "memory_mb"]
+        self.assertEqual(len(memory), 19)
         for event in target_metrics:
-            if event["attrs"]["name"] == "memory_mb" or event["t"] >= 960:
+            name = event["attrs"]["name"]
+            if name == "memory_mb" or (name == "error_rate" and event["t"] >= 960):
                 self.assertIn(event["id"], injected)
             else:
                 self.assertNotIn(event["id"], injected)

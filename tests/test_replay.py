@@ -93,13 +93,14 @@ class WindowTest(unittest.TestCase):
             previous = now
         self.assertEqual(seen, [event["id"] for event in incident.events])
 
-    def test_first_call_contains_t_zero_events(self):
+    def test_first_call_contains_all_events_up_to_step(self):
         incident = make_incident()
         agent = Recorder()
         replay(incident, agent, 60)
         first = agent.calls[0][1]
         self.assertTrue(first)
-        self.assertEqual({event["t"] for event in first}, {0})
+        self.assertTrue(all(event["t"] <= 60 for event in first))
+        self.assertIn(0, {event["t"] for event in first})
 
     def test_no_truth_or_extra_keys_in_events(self):
         agent = Recorder()
