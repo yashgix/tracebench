@@ -1,0 +1,6 @@
+[
+  {"type": "bad_deploy", "service": "db", "start": 300},
+  {"type": "config_error", "service": "api", "start": 300},
+  {"type": "dependency_timeout", "service": "cache", "start": 240},
+  {"type": "memory_leak", "service": "db", "start": 120}
+]
