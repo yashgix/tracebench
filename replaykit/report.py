@@ -10,15 +10,12 @@ def _cell(value):
 
 
 def _table(headers, rows):
-    rows = list(rows)
     lines = [
         "| " + " | ".join(str(header) for header in headers) + " |",
         "|" + " --- |" * len(headers),
     ]
-    for index, row in enumerate(rows):
-        cells = " | ".join(_cell(cell) for cell in row)
-        suffix = " |" if index < len(rows) - 1 else ""
-        lines.append(f"| {cells}{suffix}")
+    for row in rows:
+        lines.append("| " + " | ".join(_cell(cell) for cell in row) + " |")
     return "\n".join(lines)
 
 
@@ -108,7 +105,7 @@ def render_markdown(report):
             f"`{scenario_sha[:12]}` \u00b7 replaykit {meta.get('replaykit_version')} "
             f"\u00b7 seeds {seeds} \u00b7 step {meta.get('step')}"
         ),
-        "## Agents\n" + agents_table(report),
+        "## Agents\n\n" + agents_table(report),
     ]
 
     data = breakdown(report)
@@ -130,7 +127,7 @@ def render_markdown(report):
             counts = by_type.get(fault_type, {"runs": 0, "correct": 0})
             row.append(f"{counts.get('correct', 0)}/{counts.get('runs', 0)}")
         rows.append(row)
-    sections.append("## Accuracy by fault type\n" + _table(headers, rows))
+    sections.append("## Accuracy by fault type\n\n" + _table(headers, rows))
 
     misdiagnoses = []
     confusion = data.get("confusion", {})
@@ -146,11 +143,11 @@ def render_markdown(report):
                     )
     if misdiagnoses:
         sections.append(
-            "## Misdiagnoses\n"
+            "## Misdiagnoses\n\n"
             + _table(["agent", "truth", "diagnosed", "runs"], misdiagnoses)
         )
     else:
-        sections.append("## Misdiagnoses\nNone.")
+        sections.append("## Misdiagnoses\n\nNone.")
 
     noise_rows = [
         [
@@ -161,7 +158,7 @@ def render_markdown(report):
         for agent in sorted(report.get("agents", {}))
     ]
     sections.append(
-        "## Decoys and noise\n"
+        "## Decoys and noise\n\n"
         + _table(["agent", "decoy blamed", "noise cited"], noise_rows)
     )
 

@@ -169,7 +169,7 @@ class AgentsTableTest(unittest.TestCase):
             "| agent | runs | root cause accuracy | mean points | brier |\n"
             "| --- | --- | --- | --- | --- |\n"
             "| alpha | 1 | 1.0 | 95.0 | 0.04 |\n"
-            "| zeta | 2 | 0.5 | 40.0 | -",
+            "| zeta | 2 | 0.5 | 40.0 | - |",
         )
 
 
@@ -180,27 +180,27 @@ class RenderMarkdownTest(unittest.TestCase):
                 "# Suite demo-v1",
                 "suite `aaaaaaaaaaaa` \u00b7 scenario scn `0123456789ab` "
                 "\u00b7 replaykit 0.2.0 \u00b7 seeds 1, 2 \u00b7 step 60",
-                "## Agents\n"
+                "## Agents\n\n"
                 "| agent | runs | root cause accuracy | mean points | brier |\n"
                 "| --- | --- | --- | --- | --- |\n"
                 "| alpha | 3 | 0.6667 | 63.33 | 0.25 |\n"
-                "| beta | 3 | 0.3333 | 30.0 | 0.4123",
-                "## Accuracy by fault type\n"
+                "| beta | 3 | 0.3333 | 30.0 | 0.4123 |",
+                "## Accuracy by fault type\n\n"
                 "| agent | bad_deploy | memory_leak |\n"
                 "| --- | --- | --- |\n"
                 "| alpha | 2/2 | 0/1 |\n"
-                "| beta | 0/2 | 1/1",
-                "## Misdiagnoses\n"
+                "| beta | 0/2 | 1/1 |",
+                "## Misdiagnoses\n\n"
                 "| agent | truth | diagnosed | runs |\n"
                 "| --- | --- | --- | --- |\n"
                 "| alpha | memory_leak | none | 1 |\n"
                 "| beta | bad_deploy | config_error | 1 |\n"
-                "| beta | bad_deploy | none | 1",
-                "## Decoys and noise\n"
+                "| beta | bad_deploy | none | 1 |",
+                "## Decoys and noise\n\n"
                 "| agent | decoy blamed | noise cited |\n"
                 "| --- | --- | --- |\n"
                 "| alpha | 0 | 0 |\n"
-                "| beta | 1 | 3",
+                "| beta | 1 | 3 |",
             ]
         ) + "\n"
         self.assertEqual(render_markdown(make_report()), expected)
@@ -230,7 +230,7 @@ class RenderMarkdownTest(unittest.TestCase):
             for line in render_markdown(report).splitlines()
             if line.startswith("| beta |")
         )
-        self.assertTrue(row.endswith("| -"))
+        self.assertTrue(row.endswith("| - |"))
 
     def test_no_misdiagnoses_prints_none(self):
         report = make_report()
@@ -239,7 +239,7 @@ class RenderMarkdownTest(unittest.TestCase):
             for outcome in entry["results"].values():
                 outcome["diagnosed_type"] = fault_type
         text = render_markdown(report)
-        self.assertIn("## Misdiagnoses\nNone.", text)
+        self.assertIn("## Misdiagnoses\n\nNone.\n\n## Decoys and noise", text)
         self.assertNotIn("| agent | truth | diagnosed | runs |", text)
 
     def test_ignores_a_stale_breakdown(self):
@@ -255,8 +255,8 @@ class RenderMarkdownTest(unittest.TestCase):
         }
         text = render_markdown(report)
         self.assertIn("| alpha | 2/2 | 0/1 |", text)
-        self.assertIn("| beta | 0/2 | 1/1", text)
-        self.assertIn("## Misdiagnoses\n| agent | truth | diagnosed | runs |", text)
+        self.assertIn("| beta | 0/2 | 1/1 |", text)
+        self.assertIn("## Misdiagnoses\n\n| agent | truth | diagnosed | runs |", text)
         self.assertNotIn("| alpha | 9/9 | 0/0 |", text)
 
 

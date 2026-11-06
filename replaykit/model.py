@@ -128,7 +128,7 @@ def load_scenario(path):
     try:
         with open(path, encoding="utf-8") as handle:
             scenario = json.load(handle)
-    except json.JSONDecodeError as exc:
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
         raise ValueError(f"invalid JSON in {path}: {exc}") from None
     validate_scenario(scenario)
     scenario["events"].sort(key=lambda event: (event["t"], event["id"]))
