@@ -3,7 +3,13 @@
 import json
 from dataclasses import dataclass
 
-FAULT_TYPES = ("bad_deploy", "config_error", "dependency_timeout", "memory_leak")
+FAULT_TYPES = (
+    "bad_deploy",
+    "config_error",
+    "dependency_timeout",
+    "memory_leak",
+    "pool_exhaustion",
+)
 
 EVENT_KINDS = ("metric", "log", "deploy", "alert")
 METRIC_NAMES = ("error_rate", "latency_ms", "memory_mb")
@@ -117,16 +123,21 @@ def validate_scenario(scenario):
         seen.add(event["id"])
 
 
-def load_scenario(path):
-    """Read, validate and return the scenario at *path*, events sorted by (t, id)."""
+def parse_scenario(raw, path):
+    """Parse and validate scenario bytes read from *path*, events sorted by (t, id)."""
     try:
-        with open(path, encoding="utf-8") as handle:
-            scenario = json.load(handle)
-    except json.JSONDecodeError as exc:
+        scenario = json.loads(raw.decode("utf-8"))
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
         raise ValueError(f"invalid JSON in {path}: {exc}") from None
     validate_scenario(scenario)
     scenario["events"].sort(key=lambda event: (event["t"], event["id"]))
     return scenario
+
+
+def load_scenario(path):
+    """Read, validate and return the scenario at *path*, events sorted by (t, id)."""
+    with open(path, "rb") as handle:
+        return parse_scenario(handle.read(), path)
 
 
 @dataclass(frozen=True)

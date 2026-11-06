@@ -126,6 +126,13 @@ class LoadScenarioTest(unittest.TestCase):
     def test_invalid_json(self):
         self.assertInvalid("{not json")
 
+    def test_invalid_utf8(self):
+        path = os.path.join(self.tmp.name, "scenario.json")
+        with open(path, "wb") as handle:
+            handle.write(b'{"id": "\xff"}')
+        with self.assertRaisesRegex(ValueError, "invalid JSON"):
+            load_scenario(path)
+
     def test_scenario_must_be_object(self):
         self.assertInvalid([])
 
@@ -249,7 +256,7 @@ class FaultTypesTest(unittest.TestCase):
     def test_fault_types_tuple(self):
         self.assertEqual(
             FAULT_TYPES,
-            ("bad_deploy", "config_error", "dependency_timeout", "memory_leak"),
+            ("bad_deploy", "config_error", "dependency_timeout", "memory_leak", "pool_exhaustion"),
         )
 
 

@@ -3,12 +3,11 @@ import argparse
 import json
 import sys
 
-from .baselines import LastDeployAgent, ThresholdAgent
+from .baselines import AGENT_NAMES, make_agent
 from .inject import inject
 from .model import load_scenario
-from .suite import run_suite
-
-AGENTS = {"last_deploy": LastDeployAgent, "threshold": ThresholdAgent}
+from .report import render_markdown
+from .suite import run_pinned, run_suite
 
 
 class _ArgumentParser(argparse.ArgumentParser):
@@ -20,7 +19,7 @@ def _load_faults(path):
     try:
         with open(path, encoding="utf-8") as handle:
             faults = json.load(handle)
-    except json.JSONDecodeError as exc:
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
         raise ValueError(f"invalid JSON in {path}: {exc}") from None
     if not isinstance(faults, list):
         raise ValueError(f"{path}: faults must be a JSON list")
@@ -46,11 +45,18 @@ def _parse_agents(text):
         name = part.strip()
         if not name:
             raise ValueError("agents must be a comma-separated list of names")
-        if name not in AGENTS:
+        if name not in AGENT_NAMES:
             raise ValueError(f"unknown agent {name!r}")
         if name not in names:
             names.append(name)
     return names
+
+
+def _agent_factories(names, calls):
+    return {
+        name: (lambda name=name: make_agent(name, calls))
+        for name in names
+    }
 
 
 def _build_incidents(scenario, faults, seeds):
@@ -78,6 +84,35 @@ def _write_report(report, path):
         handle.write("\n")
 
 
+def _write_markdown(text, path):
+    with open(path, "w", encoding="utf-8") as handle:
+        handle.write(text)
+
+
+def _run_command(args):
+    scenario = load_scenario(args.scenario)
+    faults = _load_faults(args.faults)
+    seeds = _parse_seeds(args.seeds)
+    names = _parse_agents(args.agents)
+    incidents = _build_incidents(scenario, faults, seeds)
+    report = run_suite(incidents, _agent_factories(names, scenario["calls"]))
+    if args.out:
+        _write_report(report, args.out)
+    print(_markdown_table(report))
+    return 0
+
+
+def _suite_command(args):
+    report = run_pinned(args.path)
+    markdown = render_markdown(report)
+    if args.out:
+        _write_report(report, args.out)
+    if args.md:
+        _write_markdown(markdown, args.md)
+    sys.stdout.write(markdown)
+    return 0
+
+
 def _parser():
     parser = _ArgumentParser(
         prog="replaykit", description="Replay incidents against AI SRE agents."
@@ -89,22 +124,19 @@ def _parser():
     run.add_argument("--seeds", required=True, metavar="SEEDS")
     run.add_argument("--agents", required=True, metavar="AGENTS")
     run.add_argument("--out", metavar="PATH")
+    suite = commands.add_parser("suite", help="run a pinned suite file")
+    suite.add_argument("path", metavar="PATH")
+    suite.add_argument("--out", metavar="PATH")
+    suite.add_argument("--md", metavar="PATH")
     return parser
 
 
 def main(argv=None):
     try:
         args = _parser().parse_args(argv)
-        scenario = load_scenario(args.scenario)
-        faults = _load_faults(args.faults)
-        seeds = _parse_seeds(args.seeds)
-        names = _parse_agents(args.agents)
-        incidents = _build_incidents(scenario, faults, seeds)
-        report = run_suite(incidents, {name: AGENTS[name] for name in names})
-        if args.out:
-            _write_report(report, args.out)
-        print(_markdown_table(report))
-        return 0
+        if args.command == "run":
+            return _run_command(args)
+        return _suite_command(args)
     except (OSError, ValueError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2

@@ -136,7 +136,8 @@ ending with a newline:
    `None.` instead of the table.
 6. `## Decoys and noise`, then `| agent | decoy blamed | noise cited |`, a separator row, one row per agent.
 
-Separator rows are `|` followed by ` --- |` once per column. Cells print values as Python's `str()` does, and
+Each `##` heading is followed by one empty line, then its table or `None.`. Every table row, data rows
+included, starts with `| ` and ends with ` |`. Separator rows are `|` followed by ` --- |` once per column. Cells print values as Python's `str()` does, and
 `None` as `-`. Agents are sorted by name everywhere.
 
 ## M7. Command line

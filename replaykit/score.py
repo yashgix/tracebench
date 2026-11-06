@@ -46,6 +46,20 @@ def score(incident, run):
     }
 
 
+def noise_score(incident, run):
+    """Return decoy and noise diagnostics for *run* on *incident*."""
+    truth = incident.truth
+    diagnosis = run.diagnosis
+    if diagnosis is None:
+        return {"decoy_blamed": False, "noise_cited": 0}
+    decoy_service = getattr(truth, "decoy_service", None)
+    noise_ids = getattr(truth, "noise_ids", frozenset())
+    return {
+        "decoy_blamed": decoy_service is not None and diagnosis.service == decoy_service,
+        "noise_cited": sum(1 for event_id in diagnosis.evidence if event_id in noise_ids),
+    }
+
+
 def brier(pairs):
     """Mean squared error of confidences against outcomes; None when empty."""
     pairs = list(pairs)
