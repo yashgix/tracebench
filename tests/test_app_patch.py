@@ -9,7 +9,7 @@ from pathlib import Path
 
 from app_helpers import FIX, REPO, edit, needs_repo
 from replaykit.app import cases, world
-from replaykit.app.patch import PROTECTED, check_patch, protected_result, validate_patch
+from replaykit.app.patch import PROTECTED, ROOT, check_patch, protected_result, validate_patch
 
 LEAKY_RESERVE = """            connection = await self._connection()
             stock = await self._read_stock(connection, sku)
@@ -18,7 +18,8 @@ LEAKY_RESERVE = """            connection = await self._connection()
 
 
 def validate(patch, service="inventory", base=cases.LEAK):
-    return validate_patch(REPO, cases.case("leak", 1), {"service": service, "patch": patch}, base)
+    return validate_patch(REPO, cases.case("leak", 1), {"service": service, "patch": patch}, base,
+                          cases.CASES["leak"]["protected"])
 
 
 class CheckPatchTest(unittest.TestCase):
@@ -57,7 +58,8 @@ class ProtectedChecksTest(unittest.TestCase):
     def run_checks(self, commit):
         with tempfile.TemporaryDirectory() as folder:
             world.export(REPO, commit, Path(folder))
-            done = subprocess.run([sys.executable, "-I", "-B", str(PROTECTED / "run.py"), folder],
+            done = subprocess.run([sys.executable, "-I", "-B", str(ROOT / PROTECTED / "run.py"), folder,
+                                   "check_inventory.py"],
                                   capture_output=True, text=True, check=True)
         return json.loads(done.stdout)
 
@@ -137,9 +139,10 @@ class ValidatePatchTest(unittest.TestCase):
         self.assertFalse(result["valid"])
 
     def test_an_incomplete_protected_run_fails(self):
-        self.assertEqual(protected_result({"run": 0, "failed": []}), {"run": 0, "failed": ["incomplete"]})
-        self.assertEqual(protected_result(None), {"run": 0, "failed": ["incomplete"]})
-        self.assertEqual(protected_result({"run": 5, "failed": []}), {"run": 5, "failed": []})
+        checks = cases.CASES["leak"]["protected"]
+        self.assertEqual(protected_result({"run": 0, "failed": []}, checks), {"run": 0, "failed": ["incomplete"]})
+        self.assertEqual(protected_result(None, checks), {"run": 0, "failed": ["incomplete"]})
+        self.assertEqual(protected_result({"run": 5, "failed": []}, checks), {"run": 5, "failed": []})
 
     def test_a_forbidden_patch_never_runs(self):
         result = validate(FIX.replace("+            try:", "+            import os"))

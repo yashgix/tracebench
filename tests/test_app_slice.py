@@ -4,39 +4,17 @@ import json
 import unittest
 from pathlib import Path
 
-from app_helpers import FIX, REPO, edit, needs_repo
+from app_helpers import EMPTY, FIX, REPO, calls, edit, needs_repo, result, scripted
 from replaykit.app import actions, cases, tools
 from replaykit.app.evaluate import run_app_case
-from replaykit.investigate import Reply
 
 GIVEN = Path(__file__).resolve().parents[1] / "replaykit" / "app" / "investigator"
-TRUTH = cases.CASES["leak"]["truth"]
-EMPTY = {"calls": [], "service": "-", "fault_type": "-", "commit": "-", "file": "-", "function": "-",
-         "confidence": 0, "evidence": [], "summary": "checking", "patch": ""}
-
-
-def calls(*triples):
-    return {**EMPTY, "act": "call", "calls": [dict(zip(("tool", "service", "arg"), t)) for t in triples]}
 
 
 def decide(act, evidence, patch="", **fields):
     return {**EMPTY, "act": act, "service": "inventory", "fault_type": "resource_leak", "commit": cases.LEAK,
             "file": "shop/inventory.py", "function": "Inventory.reserve", "confidence": 90, "evidence": evidence,
             "summary": "reserve leaks a connection on every failed stock check", "patch": patch, **fields}
-
-
-def result(packet, tool):
-    """The latest result of *tool* in the packet's history."""
-    return [r for entry in packet["history"] if entry["act"] == "call" for r in entry["results"]
-            if r["tool"] == tool][-1]
-
-
-def scripted(*steps):
-    """A model that answers turn n with steps[n-1](packet), or the action itself."""
-    def model(incident_id, turn, packet):
-        step = steps[turn - 1]
-        return Reply("ok", step(packet) if callable(step) else step, 1000, 100, 10, 50)
-    return model
 
 
 INVESTIGATE = (

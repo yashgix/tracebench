@@ -60,6 +60,15 @@ class Deployment:
         self._opened.append(self._connector())
         return self._opened[-1]
 
+    def hold_lock(self, at_ms, until_ms):
+        """An outside job: a connection of its own holds a write transaction on `items` from *at_ms* to *until_ms*."""
+        def begin():
+            self._job = self.connect()
+            self._job.execute("BEGIN IMMEDIATE")
+            self._job.execute("UPDATE items SET stock = stock WHERE rowid = 1")
+        self.runtime.call_at(at_ms, begin)
+        self.runtime.call_at(until_ms, lambda: self._job.execute("COMMIT"))
+
     def close(self):
         """Close every database connection, leaked ones included, once the run is recorded."""
         for connection in self._opened:
@@ -88,10 +97,10 @@ class Deployment:
             self.services["web"].orders, self.services["web"].inventory = orders, inventory
 
 
-def catalogue(seed):
+def catalogue(seed, size=40):
     """Stock and popularity: a long tail of products, a few of them nearly sold out."""
     rng = random.Random(f"{seed}:catalogue")
-    skus = [f"sku-{i:03d}" for i in range(40)]
+    skus = [f"sku-{i:03d}" for i in range(size)]
     stock = {sku: rng.randint(800, 2000) for sku in skus}
     for rank in (17, 26, 35):
         stock[skus[rank]] = rng.randint(0, 6)
@@ -117,6 +126,15 @@ def traffic(deployment, seed, skus, weights, until_ms, mean_gap_ms=500):
             deployment.runtime.spawn(request("checkout", (f"user-{rng.randint(1, 900)}", sku, rng.randint(1, 3))), at=t)
         else:
             deployment.runtime.spawn(request("product", (sku,)), at=t)
+
+
+def load_test(deployment, spec):
+    """An internal client's checkouts at a fixed rate: *spec* has `user`, `sku`, `start_ms`, `end_ms`, `per_s`."""
+    async def checkout():
+        await deployment.services["web"].checkout(spec["user"], spec["sku"], 1)
+
+    for t in range(spec["start_ms"], spec["end_ms"], 1000 // spec["per_s"]):
+        deployment.runtime.spawn(checkout(), at=t)
 
 
 def request_metrics(spans, until_ms):

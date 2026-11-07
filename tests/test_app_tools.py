@@ -2,11 +2,10 @@
 
 import json
 import subprocess
-import tempfile
 import unittest
 from pathlib import Path
 
-from app_helpers import FIX, REPO, leak_incident, needs_repo
+from app_helpers import REPO, leak_incident, needs_repo
 from replaykit.app import cases
 from replaykit.app.bundle import bundle
 from replaykit.app.incident import run_case
@@ -56,21 +55,14 @@ class BundleTest(unittest.TestCase):
         self.assertEqual(incident.code["deployed"]["web"], cases.GOOD)
         self.assertEqual(json.dumps(incident.__dict__), json.dumps(self.incident.__dict__))
 
-    def test_a_later_commit_is_out_of_reach(self):
-        with tempfile.TemporaryDirectory() as folder:
-            clone = Path(folder) / "shop"
-            subprocess.run(["git", "clone", "-q", str(REPO), str(clone)], check=True)
-            git = ["git", "-C", str(clone), "-c", "user.name=t", "-c", "user.email=t@example.invalid",
-                   "-c", "commit.gpgsign=false"]
-            subprocess.run([*git, "apply", "-"], input=FIX, text=True, check=True)
-            subprocess.run([*git, "commit", "-q", "-am", "inventory: release in finally"], check=True)
-            later = subprocess.run([*git, "rev-parse", "--short=7", "HEAD"], capture_output=True, text=True,
-                                   check=True).stdout.strip()
-            run = cases.case("leak", 1)
-            incident = bundle(clone, run, run_case(clone, run))
-        self.assertNotIn(later, json.dumps(incident.__dict__))
-        self.assertEqual(call(CodeEvidence(incident), "diff", arg=later)["error"], f"unknown commit {later!r}")
-
+    def test_later_commits_are_out_of_reach(self):
+        listing = subprocess.run(["git", "--git-dir", str(REPO / ".git"), "rev-list", f"{cases.LEAK}..main"],
+                                 capture_output=True, text=True, check=True).stdout.split()
+        later, dump = [full[:7] for full in listing], json.dumps(self.incident.__dict__)
+        self.assertGreaterEqual(len(later), 11)  # the leak's own fix among them
+        for short in later:
+            self.assertNotIn(short, dump)
+            self.assertEqual(call(CodeEvidence(self.incident), "diff", arg=short)["error"], f"unknown commit {short!r}")
 
 @needs_repo
 class CodeToolsTest(unittest.TestCase):

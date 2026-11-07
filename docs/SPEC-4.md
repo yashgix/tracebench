@@ -1,0 +1,71 @@
+# replaykit M4: code-aware incidents on a real app, with a validated patch
+
+Extends SPEC-3 (the bounded loop, limits, evidence rule); M3 suites and reports are unchanged. Everything here is
+offline: the app runs on a simulated clock, the database is SQLite in memory, and no network is used.
+
+## B1. The app and its history
+- `~/Projects/deeptrace-shopapp`: three services (`web` → `orders` → `inventory`, `web` → `inventory`), a bounded
+  connection pool over SQLite, OpenTelemetry-shaped spans, logs and gauges. `shop/runtime.py`, `shop/telemetry.py` and
+  `shop/pool.py` are the measuring instruments: a patch may not change them.
+- The history is one `main` line built by `make_history.py` (fixed authors and dates, so the same hashes every build).
+  Each defect is a commit whose message reads like ordinary work; the commits after it (its fix, later features) are
+  unreachable from any incident that deploys it. Earlier incidents and their fixes stay visible, as in a real repo.
+- `world.py` (trusted) runs every service at its own commit, seeded traffic, deploys at fixed times and outside events
+  (a load test, a database job). The monitoring system turns spans into per-minute request metrics; the page rule is
+  web's 5xx rate over 5% for two minutes in a row. An incident is cut at the first page.
+
+## B2. Cases (`replaykit/app/cases.py`; truth never leaves the trusted side)
+Every case pages from running the app (c1 at 13:00, the others at 12:00, for seeds 1 and 2); the fix commit after each
+defect never pages under the same traffic, and c5 and c6 never page without their outside event. Every commit passes
+the app's own tests, as a real defect would pass CI.
+Incident ids are opaque (`shop-app:c<N>:<seed>`), so neither ids nor run descriptions name the fault.
+
+| # | Name | What happens | Expected |
+|---|---|---|---|
+| c1 | leak | `inventory: move the stock check into a helper` stops returning the connection when a reservation fails | patch: inventory, `resource_leak`, `shop/inventory.py`, `Inventory.reserve` |
+| c2 | config | `config: limit checkouts per product to slow down stock bots` turns web's checkout limit (5 per user per second) into 5 per product per minute; buyers of popular products get 503s (about a quarter of requests), single-request tests still pass | patch: web, `config_error`, `shop/config.py` (no function) |
+| c3 | decoy | orders caps an order at two items but raises a plain error, so a third of checkouts become 502s; a harmless web deploy (log wording) follows 90 s later, closer to the page and after the errors began | patch: orders, `code_defect`, `shop/orders.py`, `Orders.place` |
+| c4 | slow query | product lookups become case-insensitive with `lower(sku) = lower(?)`, which SQLite runs as a full scan of a 6,000-row catalogue (about 1.8 s); product pages pass web's 1.5 s upstream timeout and fail | patch: inventory, `slow_query`, `shop/inventory.py`, `Inventory.stock` |
+| c5 | outside lock | no deploy; a job outside the shop holds a write transaction on `items`; every request that reaches inventory fails and inventory logs `database table is locked: items` | escalate |
+| c6 | load test | no deploy; one internal client (`perf-loadtest`) sends 100 checkouts a second for 110 s; web's per-user limit answers 503 "slow down"; customers are not affected and the traffic has stopped by the page | dismiss |
+
+- Query cost (from `db: run queries through one helper` on): `db.query` sleeps by SQLite's own plan: `QUERY_MS`, plus
+  `SCAN_US_PER_ROW` (300 µs) for each row of a scanned table. c1 runs on its old commits, so its bytes are unchanged.
+- History after the leak: its fix, the per-user checkout limit, c2's defect and fix, c3's defect, decoy and fix, the
+  upstream timeout, the query helper, c4's defect and fix (`later_commits.py` beside `make_history.py`).
+- c5 and c6 are honest negatives: nothing in the shop's code is wrong. c5 is outside the team's reach (escalate). c6
+  is a planned test throttled as designed, over before the page (dismiss; escalate is safe but not resolved). A patch
+  is wrong in both.
+
+## B3. Scoring (`score_app`)
+- `decision_correct`: the act equals the case's expected act. `root_cause`: service, fault type and commit. `location`:
+  the file and, when the truth names one, the function (`Class.method` or `method`).
+- `evidence_valid`: every cited id was in a tool result (with a decision, every such result reached the model), and a
+  diagnosis or patch also read its commit and file.
+- `resolved`: decision correct, and for diagnose/patch also location and evidence, and for patch a valid patch.
+
+## B4. Patch validation (trusted) and the execution boundary
+- Static check (unchanged from the slice): only `shop/*.py` except the three instruments, at most 40 changed lines,
+  plain unified diff, added lines may not import or reach internals. After a fresh clone at the deployed commit and
+  `git apply`, an AST comparison refuses new imports, dunders, denied names and SQL, and harness internals.
+- Then three runs: the app's own tests, the case's protected checks (`run.py <tree> <check files>`), and the same
+  traffic with the patched commit deployed. Valid = own tests pass, every protected check runs and passes, and the replay is clean (no page, pool back
+  to 0). Each case lists its protected checks: its own and the earlier ones that apply to its code
+  (`replaykit/app/protected/check_*.py`, never in the bundle, never shown to the model): `check_inventory` (connections
+  come back), `check_limits` (one busy user is slowed, a product's many buyers are not), `check_orders` (an order over
+  the cap is a 4xx and takes no stock), `check_lookup` (any case matches, under 50 ms in 6,000 rows). Reference fixes:
+  `protected/<case>.patch`.
+- **Boundary:** the patched code runs only inside those three runs. For any model-written patch they run as the
+  `_arcexec` account through the coordinator's existing `sandbox.run` (Seatbelt, no network, the home folder hidden,
+  reads limited to the clone, replaykit and the interpreter, writes only to a scratch folder). The trusted side
+  builds the clone, reads only each run's stdout file and accepts only an exact result shape. A runner has `root`
+  (where job folders go), `replaykit` (the tree the jobs run) and is called with (args, cwd, job folder). Tests and
+  scripted rehearsals use `LocalRunner` (sandbox-exec as the same user).
+- **Named limit:** the protected checks and the replay import the patched code, so they run in its process; a
+  malicious patch could forge their output. The AST rules make that hard, the boundary keeps it from files, keys and
+  the network, and a human reviews every patch before anything is merged. "Protected" means the model never sees the
+  checks; it does not make their results tamper-proof.
+
+## B5. Limits
+Simulated clock and SQLite in memory (an application-level demo, not a Postgres equivalent); one app, six cases;
+query cost is a model of the plan, not measured time; per-minute metrics; the page rule is fixed.

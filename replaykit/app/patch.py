@@ -1,6 +1,6 @@
 """A model's patch is untrusted text. It is checked as text, applied to a fresh clone at the deployed commit, checked
-again as code, and judged by the app's own tests, the protected checks and the same traffic, each in a separate
-sandboxed process (trusted side)."""
+again as code, and judged by the app's own tests, the case's protected checks and the same traffic, each in a separate
+sandboxed process run by a runner (SPEC-4 B4; trusted side)."""
 
 import ast
 import json
@@ -23,9 +23,8 @@ SQL = ("ATTACH", "DETACH", "VACUUM", "PRAGMA", "LOAD_EXTENSION")
 FORBIDDEN = re.compile(rf"\bimport\b|__|\b(?:{'|'.join(DENIED)})\b|(?i:\b(?:{'|'.join(SQL)})\b)")
 BREAKS = re.compile("[\r\x0b\x0c\x1c\x1d\x1e\x85\u2028\u2029]")  # line ends to Python, not to git
 META = re.compile(r"diff --git a/(\S+) b/\1|index [0-9a-f]+\.\.[0-9a-f]+(?: 100644)?")
-PROTECTED = Path(__file__).resolve().parent / "protected"
 ROOT = Path(__file__).resolve().parents[2]
-CHECKS = sum(f.read_text().count("    def test_") for f in PROTECTED.glob("check_*.py"))
+PROTECTED = Path("replaykit/app/protected")  # inside a replaykit tree
 GIT_ENV = {"PATH": "/usr/bin:/bin", "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_CONFIG_NOSYSTEM": "1",
            "GIT_AUTHOR_DATE": "2026-11-07T00:00:00Z", "GIT_COMMITTER_DATE": "2026-11-07T00:00:00Z"}
 
@@ -74,6 +73,10 @@ def check_patch(text):
     return sorted(files), changed
 
 
+def check_count(checks):
+    return sum((ROOT / PROTECTED / name).read_text().count("    def test_") for name in checks)
+
+
 def _run(args, cwd, env=None, stdin=None):
     try:
         return subprocess.run(args, cwd=cwd, env=env or {"PATH": "/usr/bin:/bin"}, input=stdin, capture_output=True,
@@ -82,12 +85,20 @@ def _run(args, cwd, env=None, stdin=None):
         return None
 
 
-def _sandboxed(args, cwd, folder):
-    """Run patched code with no network and no writes outside *folder*."""
-    profile = (f'(version 1)(allow default)(deny network*)(deny file-write*)'
-               f'(allow file-write* (subpath "{Path(folder).resolve()}") (literal "/dev/null"))')
-    env = {"PATH": "/usr/bin:/bin", "TMPDIR": str(folder)}
-    return _run(["/usr/bin/sandbox-exec", "-p", profile, sys.executable, "-B", *args], cwd, env)
+class LocalRunner:
+    """Runs patched code as this user under sandbox-exec: no network, no writes outside the job's folder. For tests and
+    scripted rehearsals; a model's patch runs through a runner for the _arcexec account instead."""
+
+    root = None  # where job folders are made (None: the system's temporary folder)
+    replaykit = ROOT  # the replaykit tree whose protected checks and replay the jobs run
+
+    def __call__(self, args, cwd, folder):
+        """(exit code, stdout) of `python -B *args*`, or None on timeout."""
+        profile = (f'(version 1)(allow default)(deny network*)(deny file-write*)'
+                   f'(allow file-write* (subpath "{Path(folder).resolve()}") (literal "/dev/null"))')
+        env = {"PATH": "/usr/bin:/bin", "TMPDIR": str(folder)}
+        done = _run(["/usr/bin/sandbox-exec", "-p", profile, sys.executable, "-B", *args], cwd, env)
+        return None if done is None else (done.returncode, done.stdout)
 
 
 def _apply(repo, base, patch, clone):
@@ -133,41 +144,41 @@ def _check_code(repo, base, clone, files):
             raise ValueError(f"the patch adds {', '.join(sorted(added))} to {path}")
 
 
-def _own_tests(clone):
-    done = _sandboxed(["-m", "unittest", "discover", "-s", "tests"], clone, clone.parent)
-    return "timeout" if done is None else ("pass" if done.returncode == 0 else "fail")
+def _own_tests(clone, runner):
+    done = runner(["-m", "unittest", "discover", "-s", "tests"], clone, clone.parent)
+    return "timeout" if done is None else ("pass" if done[0] == 0 else "fail")
 
 
 def _result(done, keys):
     """The JSON object a check printed, or None unless it has exactly *keys*."""
-    if done is None or done.returncode:
+    if done is None or done[0]:
         return None
     try:
-        result = json.loads(done.stdout)
+        result = json.loads(done[1])
     except ValueError:
         return None
     return result if isinstance(result, dict) and set(result) == set(keys) else None
 
 
-def protected_result(result):
-    """*result* if it is a complete run of every protected check, else a failed one."""
-    if result is None or result["run"] != CHECKS or not isinstance(result["failed"], list):
+def protected_result(result, checks):
+    """*result* if it is a complete run of every check in *checks*, else a failed one."""
+    if result is None or result["run"] != check_count(checks) or not isinstance(result["failed"], list):
         return {"run": 0, "failed": ["incomplete"]}
     return result
 
 
-def _protected(clone):
-    done = _sandboxed(["-I", str(PROTECTED / "run.py"), str(clone)], clone.parent, clone.parent)
-    return protected_result(_result(done, ("run", "failed")))
+def _protected(clone, checks, runner):
+    done = runner(["-I", str(runner.replaykit / PROTECTED / "run.py"), str(clone), *checks], clone.parent, clone.parent)
+    return protected_result(_result(done, ("run", "failed")), checks)
 
 
-def _replay(clone, case, service, base, patched):
+def _replay(clone, case, service, base, patched, runner):
     deploys = [d | {"commit": patched} if (d["service"], d["commit"]) == (service, base) else d
                for d in case["deploys"]]
     if deploys == case["deploys"]:
         deploys = [{"at_ms": 0, "service": service, "commit": patched}, *deploys]
-    done = _sandboxed(["-m", "replaykit.app.patch", str(clone), json.dumps(case | {"deploys": deploys})], ROOT,
-                      clone.parent)
+    done = runner(["-m", "replaykit.app.patch", str(clone), json.dumps(case | {"deploys": deploys})], runner.replaykit,
+                  clone.parent)
     result = _result(done, ("page", "pool_in_use_end", "web_errors", "clean"))
     if result is None or not isinstance(result["clean"], bool):
         return {"page": None, "pool_in_use_end": None, "web_errors": None, "clean": False}
@@ -185,21 +196,22 @@ def replay_summary(repo, case):
             "clean": raw["page"] is None and end == 0}
 
 
-def validate_patch(repo, case, decision, base):
-    """Judge *decision*'s patch, made against *base* (the commit deployed for its service), on *case*."""
+def validate_patch(repo, case, decision, base, checks, runner=LocalRunner()):
+    """Judge *decision*'s patch, made against *base* (the commit deployed for its service), on *case* (a run
+    description) with the protected *checks* (file names)."""
     result = {"files": [], "changed_lines": 0, "applies": False, "error": None, "own_tests": None,
               "protected": None, "replay": None, "valid": False}
     try:
         result["files"], result["changed_lines"] = check_patch(decision["patch"])
-        with tempfile.TemporaryDirectory() as folder:
+        with tempfile.TemporaryDirectory(dir=runner.root) as folder:
             clone = Path(folder) / "repo"
             patch = decision["patch"] if decision["patch"].endswith("\n") else decision["patch"] + "\n"
             patched = _apply(repo, base, patch, clone)
             _check_code(repo, base, clone, result["files"])
             result["applies"] = True
-            result["own_tests"] = _own_tests(clone)
-            result["protected"] = _protected(clone)
-            result["replay"] = _replay(clone, case, decision["service"], base, patched)
+            result["own_tests"] = _own_tests(clone, runner)
+            result["protected"] = _protected(clone, checks, runner)
+            result["replay"] = _replay(clone, case, decision["service"], base, patched, runner)
     except ValueError as exc:
         result["error"] = str(exc)
         return result
