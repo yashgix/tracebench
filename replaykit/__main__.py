@@ -1,13 +1,15 @@
 """Command line interface for replaykit."""
 import argparse
 import json
+import os
 import sys
 
 from .baselines import AGENT_NAMES, make_agent
+from .broker import BrokerModel
 from .inject import inject
 from .model import load_scenario
-from .report import render_markdown
-from .suite import run_pinned, run_suite
+from .report import agents_table, render_investigation_markdown, render_markdown
+from .suite import RecordedModel, load_investigation_suite, run_investigations, run_pinned, run_suite
 
 
 class _ArgumentParser(argparse.ArgumentParser):
@@ -63,21 +65,6 @@ def _build_incidents(scenario, faults, seeds):
     return [inject(scenario, fault, seed) for fault in faults for seed in seeds]
 
 
-def _markdown_table(report):
-    lines = [
-        "| agent | runs | root cause accuracy | mean points | brier |",
-        "| --- | --- | --- | --- | --- |",
-    ]
-    for name in sorted(report["agents"]):
-        summary = report["agents"][name]
-        brier = "-" if summary["brier"] is None else summary["brier"]
-        lines.append(
-            f"| {name} | {summary['runs']} | {summary['root_cause_accuracy']} | "
-            f"{summary['mean_points']} | {brier} |"
-        )
-    return "\n".join(lines)
-
-
 def _write_report(report, path):
     with open(path, "w", encoding="utf-8") as handle:
         json.dump(report, handle, indent=2, sort_keys=True)
@@ -98,13 +85,42 @@ def _run_command(args):
     report = run_suite(incidents, _agent_factories(names, scenario["calls"]))
     if args.out:
         _write_report(report, args.out)
-    print(_markdown_table(report))
+    print(agents_table(report))
     return 0
 
 
 def _suite_command(args):
     report = run_pinned(args.path)
     markdown = render_markdown(report)
+    if args.out:
+        _write_report(report, args.out)
+    if args.md:
+        _write_markdown(markdown, args.md)
+    sys.stdout.write(markdown)
+    return 0
+
+
+def _models(args):
+    names = [n for n in load_investigation_suite(args.path)["suite"]["investigators"] if n not in AGENT_NAMES]
+    if args.replay and args.broker:
+        raise ValueError("--replay and --broker cannot be used together")
+    if names and args.replay:
+        with open(args.replay, encoding="utf-8") as handle:
+            saved = json.load(handle)
+        return {name: RecordedModel(saved, name) for name in names}
+    if names and args.broker:
+        token = os.environ.get("REPLAYKIT_BROKER_TOKEN")
+        if not token:
+            raise ValueError("REPLAYKIT_BROKER_TOKEN is not set")
+        return {name: BrokerModel(name, args.broker, token) for name in names}
+    if names:
+        raise ValueError("model investigators need --replay or --broker")
+    return {}
+
+
+def _investigate_command(args):
+    report = run_investigations(args.path, _models(args))
+    markdown = render_investigation_markdown(report)
     if args.out:
         _write_report(report, args.out)
     if args.md:
@@ -128,6 +144,12 @@ def _parser():
     suite.add_argument("path", metavar="PATH")
     suite.add_argument("--out", metavar="PATH")
     suite.add_argument("--md", metavar="PATH")
+    investigate = commands.add_parser("investigate", help="run an investigation suite")
+    investigate.add_argument("path", metavar="PATH")
+    investigate.add_argument("--replay", metavar="REPORT")
+    investigate.add_argument("--broker", metavar="URL")
+    investigate.add_argument("--out", metavar="PATH")
+    investigate.add_argument("--md", metavar="PATH")
     return parser
 
 
@@ -136,8 +158,10 @@ def main(argv=None):
         args = _parser().parse_args(argv)
         if args.command == "run":
             return _run_command(args)
+        if args.command == "investigate":
+            return _investigate_command(args)
         return _suite_command(args)
-    except (OSError, ValueError) as exc:
+    except (OSError, ValueError, KeyError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
 

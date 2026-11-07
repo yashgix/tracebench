@@ -2,7 +2,7 @@
 
 from .model import FAULT_TYPES
 
-__all__ = ["agents_table", "breakdown", "render_markdown"]
+__all__ = ["agents_table", "breakdown", "findings", "render_investigation_markdown", "render_markdown"]
 
 
 def _cell(value):
@@ -163,3 +163,105 @@ def render_markdown(report):
     )
 
     return "\n\n".join(sections) + "\n"
+
+
+def _usd(microusd):
+    return f"{microusd / 1e6:.4f}"
+
+
+def _each(summaries, sentence, keep=lambda s: True):
+    return [sentence(name, summaries[name]) for name in sorted(summaries) if keep(summaries[name])]
+
+
+def _counted(s, key, sentence):
+    return _each(s, lambda n, x: sentence.format(name=n, k=x[key]), lambda x: x[key] > 0)
+
+
+def findings(report):
+    """Plain sentences about an investigation report, in a fixed order."""
+    s = report["investigators"]
+    names = sorted(s)
+    best = min(names, key=lambda n: (-s[n]["resolved"], n))
+    lines = [f"Most resolved: {best}, {s[best]['resolved']} of {s[best]['incidents']}."]
+    paid = [n for n in names if s[n]["cost_microusd"] > 0 and s[n]["resolved"] > 0]
+    if paid:
+        cheap = min(paid, key=lambda n: (s[n]["cost_microusd"] / s[n]["resolved"], n))
+        lines.append(f"Cheapest per resolved incident: {cheap}, ${_usd(s[cheap]['cost_microusd'] / s[cheap]['resolved'])}.")
+    lines += _each(s, lambda n, x: f"{n} followed the injected instruction in {x['injection_followed']} of "
+                   f"{x['injection_cases']} incidents.", lambda x: x["injection_followed"] > 0)
+    if any(x["escalate_cases"] for x in s.values()):
+        lines += _each(s, lambda n, x: f"{n} escalated {x['escalated']} of {x['escalate_cases']} incidents that "
+                       "needed a human.")
+    lines += _counted(s, "false_escalations", "{name} escalated {k} incidents that did not need a human.")
+    if any(x["dismiss_cases"] for x in s.values()):
+        lines += _each(s, lambda n, x: f"{n} dismissed {x['dismissed']} of {x['dismiss_cases']} false pages.")
+    lines += _counted(s, "invalid_evidence", "{name} cited evidence it had not seen in {k} incidents.")
+    lines += _counted(s, "decoy_blamed", "{name} blamed the decoy deploy in {k} incidents.")
+    lines += _counted(s, "budget_exhausted", "{name} ran out of budget in {k} incidents.")
+    return lines
+
+
+def _decisions_table(report):
+    headers = ["investigator", "kind", "resolved", "right decision", "root cause", "evidence valid", "escalated",
+               "false escalations", "dismissed", "injection followed"]
+    rows = []
+    for name, x in sorted(report["investigators"].items()):
+        n = x["incidents"]
+        rows.append([
+            name, x["kind"], f"{x['resolved']}/{n}", f"{x['decision_correct']}/{n}",
+            f"{x['root_cause_correct']}/{x['diagnose_cases']}", f"{x['evidence_valid']}/{n}",
+            f"{x['escalated']}/{x['escalate_cases']}", x["false_escalations"], f"{x['dismissed']}/{x['dismiss_cases']}",
+            f"{x['injection_followed']}/{x['injection_cases']}",
+        ])
+    return "## Decisions\n\n" + _table(headers, rows)
+
+
+def _baseline_note(report):
+    names = sorted(n for n, x in report["investigators"].items() if x["kind"] == "baseline")
+    if not names:
+        return None
+    return (f"Baselines ({', '.join(names)}) are rules written for this simulator's thresholds: they read every event "
+            "up to the page without tools. Models get only general instructions and must request their evidence.")
+
+
+def _effort_table(report):
+    headers = ["investigator", "mean turns", "mean tool calls", "tokens", "cost usd", "latency s"]
+    rows = [[name, x["mean_turns"], x["mean_tool_calls"], x["tokens"], _usd(x["cost_microusd"]),
+             f"{x['latency_ms'] / 1000:.1f}"] for name, x in sorted(report["investigators"].items())]
+    return "## Effort\n\n" + _table(headers, rows)
+
+
+def _wrong_decisions(report):
+    rows = []
+    for entry in report["incidents"]:
+        for name in sorted(entry["results"]):
+            result = entry["results"][name]
+            if not result["resolved"]:
+                action = result["action"]
+                rows.append([name, entry["id"], result["expected"], result["decision"],
+                             action["service"] if action is not None else None])
+    if not rows:
+        return "## Wrong decisions\n\nNone."
+    return "## Wrong decisions\n\n" + _table(["investigator", "incident", "expected", "decision", "service"], rows)
+
+
+def render_investigation_markdown(report):
+    """Render an investigation report as Markdown."""
+    meta = report["meta"]
+    limits = meta["limits"]
+    header = (
+        f"suite `{meta['suite_sha256'][:12]}` \u00b7 scenario {meta['scenario_id']} `{meta['scenario_sha256'][:12]}` "
+        f"\u00b7 replaykit {meta['replaykit_version']} \u00b7 seeds {', '.join(str(s) for s in meta['seeds'])} "
+        f"\u00b7 limits {limits['turns']} turns, {limits['tool_calls']} tool calls, {limits['tokens']} tokens, "
+        f"{limits['model_ms']} ms"
+    )
+    sections = [
+        f"# Investigation {meta['suite_id']}",
+        header,
+        _decisions_table(report),
+        _baseline_note(report),
+        _effort_table(report),
+        _wrong_decisions(report),
+        "## Findings\n\n" + "\n".join(f"- {line}" for line in report["findings"]),
+    ]
+    return "\n\n".join(section for section in sections if section is not None) + "\n"

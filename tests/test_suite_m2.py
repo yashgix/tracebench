@@ -242,7 +242,7 @@ class RunPinnedTest(unittest.TestCase):
         self.assertEqual(meta["suite_sha256"], sha256(self.suite_path))
         self.assertEqual(meta["scenario_id"], "scn-suite")
         self.assertEqual(meta["scenario_sha256"], sha256(self.scenario_path))
-        self.assertEqual(meta["replaykit_version"], "0.2.0")
+        self.assertEqual(meta["replaykit_version"], "0.3.0")
         self.assertEqual(meta["seeds"], [1, 2])
         self.assertEqual(meta["step"], 60)
 
