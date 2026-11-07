@@ -14,8 +14,8 @@ CALLS = {"web": ["orders", "inventory"], "orders": ["inventory"], "inventory": [
 PAGE_RATE, PAGE_MINUTES = 0.05, 2
 
 
-def export(repo, commit, target):
-    """Write *commit*'s tree to *target* blob by blob (no checkout, no git filters)."""
+def blobs(repo, commit):
+    """Yield (path, bytes) for every file of *commit*, read blob by blob (no checkout, no git filters)."""
     git = ["git", "--git-dir", str(Path(repo) / ".git")]
     listing = subprocess.run([*git, "ls-tree", "-r", "-z", commit], capture_output=True, check=True).stdout
     for entry in filter(None, listing.split(b"\0")):
@@ -24,9 +24,14 @@ def export(repo, commit, target):
         path = Path(raw.decode())
         if kind != "blob" or mode != "100644" or path.is_absolute() or ".." in path.parts:
             raise ValueError(f"cannot export {path} exactly")
+        yield path, subprocess.run([*git, "cat-file", "blob", blob], capture_output=True, check=True).stdout
+
+
+def export(repo, commit, target):
+    """Write *commit*'s tree to *target*."""
+    for path, data in blobs(repo, commit):
         (target / path).parent.mkdir(parents=True, exist_ok=True)
-        (target / path).write_bytes(subprocess.run([*git, "cat-file", "blob", blob], capture_output=True,
-                                                   check=True).stdout)
+        (target / path).write_bytes(data)
 
 
 def load(root, name):

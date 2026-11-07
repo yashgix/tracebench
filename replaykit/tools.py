@@ -14,6 +14,8 @@ def _trigger(events):
 class Evidence:
     """Tool access to one incident as of the time of its first page."""
 
+    METRICS, LEVELS = METRIC_NAMES, LOG_LEVELS
+
     def __init__(self, incident):
         page = _trigger(incident.events)
         self.now = page["t"] if page else incident.duration
@@ -68,7 +70,7 @@ class Evidence:
         return {"tool": "overview", "services": latest}, ids
 
     def _metrics(self, service, metric):
-        if metric not in METRIC_NAMES:
+        if metric not in self.METRICS:
             raise ValueError(f"unknown metric {metric!r}")
         events = [e for e in self._of("metric", service) if e["attrs"]["name"] == metric][-LAST:]
         points = [[e["id"], e["t"], round(e["attrs"]["value"], 3)] for e in events]
@@ -82,8 +84,11 @@ class Evidence:
         if tool == "deploys":
             rows = [[e["id"], e["t"], e["service"], e["attrs"]["version"]] for e in self._of("deploy", service)]
             return {"tool": tool, "service": service, "deploys": rows}, [row[0] for row in rows]
-        if level != "*" and level not in LOG_LEVELS:
+        if level != "*" and level not in self.LEVELS:
             raise ValueError(f"unknown level {level!r}")
-        rows = [[e["id"], e["t"], e["service"], e["attrs"]["level"], e["attrs"]["message"]]
-                for e in self._of("log", service) if level in ("*", e["attrs"]["level"])][-LAST:]
+        rows = [self._log_row(e) for e in self._of("log", service) if level in ("*", e["attrs"]["level"])][-LAST:]
         return {"tool": tool, "service": service, "level": level, "logs": rows}, [row[0] for row in rows]
+
+    @staticmethod
+    def _log_row(event):
+        return [event["id"], event["t"], event["service"], event["attrs"]["level"], event["attrs"]["message"]]

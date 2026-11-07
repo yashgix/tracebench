@@ -2,20 +2,19 @@
 
 import json
 import unittest
-from pathlib import Path
 
+from app_helpers import REPO, needs_repo
+from replaykit.app.cases import GOOD, LEAK
+from replaykit.app.cases import case as leak_case
 from replaykit.app.incident import run_case
-
-REPO = Path.home() / "Projects" / "deeptrace-shopapp"
-GOOD, LEAK = "92b1aeb", "ee7027c"
 
 
 def case(redeploy, seed=1):
-    return {"id": "leak", "seed": seed, "baseline": GOOD, "duration_ms": 20 * 60_000,
-            "deploys": [{"at_ms": 10 * 60_000, "service": "inventory", "commit": redeploy}]}
+    run = leak_case("leak", seed)
+    return run | {"deploys": [d | {"commit": redeploy} for d in run["deploys"]]}
 
 
-@unittest.skipUnless(REPO.exists(), "needs the shop app repository")
+@needs_repo
 class LeakCaseTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

@@ -100,9 +100,9 @@ def packet_sha256(packet):
 class _Run:
     """The mutable state of one investigation."""
 
-    def __init__(self, incident, limits):
+    def __init__(self, incident, limits, evidence):
         self.incident, self.limits = incident, limits
-        self.evidence = Evidence(incident)
+        self.evidence = evidence(incident)
         self.history, self.transcript = [], []
         self.turns = self.tool_calls = self.tokens_in = self.tokens_out = self.cost = self.latency = 0
 
@@ -151,9 +151,9 @@ class _Run:
         )
 
 
-def investigate(incident, model, limits=Limits()):
-    """Let *model* investigate *incident* within *limits*."""
-    run = _Run(incident, limits)
+def investigate(incident, model, limits=Limits(), evidence=Evidence, parse=parse_action):
+    """Let *model* investigate *incident* within *limits*, with *evidence*'s tools and *parse*'s action schema."""
+    run = _Run(incident, limits, evidence)
     invalid = 0
     while not run.exhausted():
         reply = run.ask(model)
@@ -162,7 +162,7 @@ def investigate(incident, model, limits=Limits()):
         try:
             if reply.kind == "invalid":
                 raise ValueError("the reply did not match the action schema")
-            action = parse_action(reply.action, incident.services)
+            action = parse(reply.action, incident.services)
         except ValueError as exc:
             invalid += 1
             run.note({"act": "invalid", "error": str(exc)})
