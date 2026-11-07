@@ -16,9 +16,13 @@ _names = itertools.count()
 class InventoryChecks(unittest.TestCase):
     def setUp(self):
         self.runtime = Runtime()
-        connect = db.connector(f"protected-{next(_names)}")
-        self.keeper = db.create(connect, {"sku-1": 3, "sku-2": 0})
-        self.inventory = Inventory(self.runtime, Telemetry(self.runtime, random.Random(1)), connect)
+        self.connect, self.opened = db.connector(f"protected-{next(_names)}"), 0
+        self.keeper = db.create(self.connect, {"sku-1": 3, "sku-2": 0})
+        self.inventory = Inventory(self.runtime, Telemetry(self.runtime, random.Random(1)), self.counted)
+
+    def counted(self):
+        self.opened += 1
+        return self.connect()
 
     def call(self, coro):
         box = {}
@@ -58,3 +62,4 @@ class InventoryChecks(unittest.TestCase):
             self.assertEqual(self.call(self.inventory.reserve("sku-2", 1)), {"status": 409})
         self.assertEqual(self.call(self.inventory.reserve("sku-1", 1)), {"value": 2})
         self.assertEqual(self.inventory.pool.in_use, 0)
+        self.assertEqual(self.opened, 1, "connections are reused, not replaced")

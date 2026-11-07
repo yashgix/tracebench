@@ -9,7 +9,7 @@ from pathlib import Path
 
 from app_helpers import FIX, REPO, edit, needs_repo
 from replaykit.app import cases, world
-from replaykit.app.patch import PROTECTED, check_patch, validate_patch
+from replaykit.app.patch import PROTECTED, check_patch, protected_result, validate_patch
 
 LEAKY_RESERVE = """            connection = await self._connection()
             stock = await self._read_stock(connection, sku)
@@ -39,6 +39,12 @@ class CheckPatchTest(unittest.TestCase):
             "too big": "--- a/shop/web.py\n+++ b/shop/web.py\n@@ -1,21 +1,21 @@\n" + "-a\n+b\n" * 21,
             "no change": "--- a/shop/web.py\n+++ b/shop/web.py\n",
             "prose": "Here is the fix:\n--- a/shop/web.py\n+++ b/shop/web.py\n" + hunk,
+            "a lone CR": "--- a/shop/web.py\n+++ b/shop/web.py\n@@ -1,1 +1,2 @@\n a\n+X = 1\r-__import__('os')\n",
+            "a form feed": "--- a/shop/web.py\n+++ b/shop/web.py\n@@ -1,1 +1,1 @@\n-a\n+X = 1\x0cY = 2\n",
+            "SQL attach": "--- a/shop/web.py\n+++ b/shop/web.py\n@@ -1,1 +1,1 @@\n-a\n+c.execute(\"attach 'x' as e\")\n",
+            "print and exit": "--- a/shop/web.py\n+++ b/shop/web.py\n@@ -1,1 +1,1 @@\n-a\n+print('{}') or exit()\n",
+            "locked pool": "--- a/shop/pool.py\n+++ b/shop/pool.py\n" + hunk,
+            "a misleading header": "diff --git a/shop/runtime.py b/shop/runtime.py\n" + FIX.split("\n", 1)[1],
             "empty": "",
         }
         for name, patch in rejected.items():
@@ -110,6 +116,30 @@ class ValidatePatchTest(unittest.TestCase):
         result = validate(edit(cases.GOOD, "shop/inventory.py", "    async def reserve", "    async def reserve "))
         self.assertEqual((result["applies"], result["valid"]), (False, False))
         self.assertTrue(result["error"].startswith("git apply failed"))
+
+    def test_reaching_the_harness_is_refused_after_apply(self):
+        patch = edit(cases.LEAK, "shop/inventory.py", "            self._check_available(sku, stock, quantity)\n",
+                     "            self.telemetry.spans.clear()\n            self._check_available(sku, stock, quantity)\n")
+        check_patch(patch)
+        result = validate(patch)
+        self.assertEqual((result["applies"], result["own_tests"], result["valid"]), (False, None, False))
+        self.assertEqual(result["error"], "the patch adds .spans to shop/inventory.py")
+
+    def test_patched_code_cannot_write_outside_its_folder(self):
+        with tempfile.TemporaryDirectory() as folder:
+            target = Path(folder) / "escaped.db"
+            sql = f"connection.execute(\"ATT\" + \"ACH DATABASE '{target}' AS e\")\n"
+            patch = edit(cases.LEAK, "shop/inventory.py", "            self._check_available(sku, stock, quantity)\n",
+                         "            " + sql + "            self._check_available(sku, stock, quantity)\n")
+            result = validate(patch)
+            self.assertFalse(target.exists())
+        self.assertTrue(result["applies"])
+        self.assertFalse(result["valid"])
+
+    def test_an_incomplete_protected_run_fails(self):
+        self.assertEqual(protected_result({"run": 0, "failed": []}), {"run": 0, "failed": ["incomplete"]})
+        self.assertEqual(protected_result(None), {"run": 0, "failed": ["incomplete"]})
+        self.assertEqual(protected_result({"run": 5, "failed": []}), {"run": 5, "failed": []})
 
     def test_a_forbidden_patch_never_runs(self):
         result = validate(FIX.replace("+            try:", "+            import os"))

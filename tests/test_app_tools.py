@@ -48,6 +48,14 @@ class BundleTest(unittest.TestCase):
                        "test_many_conflicts_leave_the_pool_usable"):
             self.assertNotIn(secret, text)
 
+    def test_a_deploy_after_the_page_is_out_of_reach(self):
+        run = cases.case("leak", 1)
+        raw = run_case(REPO, run)
+        raw["deploys"].append({"time_ms": raw["page"]["time_ms"] + 1, "service": "web", "commit": cases.LEAK})
+        incident = bundle(REPO, run, raw)
+        self.assertEqual(incident.code["deployed"]["web"], cases.GOOD)
+        self.assertEqual(json.dumps(incident.__dict__), json.dumps(self.incident.__dict__))
+
     def test_a_later_commit_is_out_of_reach(self):
         with tempfile.TemporaryDirectory() as folder:
             clone = Path(folder) / "shop"

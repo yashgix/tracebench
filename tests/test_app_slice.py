@@ -53,7 +53,11 @@ def evidence(packet):
 
 
 def honest(patch=FIX):
-    return scripted(*INVESTIGATE, lambda packet: decide("patch", evidence(packet), patch))
+    return honest_with(evidence, patch)
+
+
+def honest_with(cite, patch=FIX):
+    return scripted(*INVESTIGATE, lambda packet: decide("patch", cite(packet), patch))
 
 
 @needs_repo
@@ -86,6 +90,11 @@ class SliceRehearsalTest(unittest.TestCase):
         outcome = self.run_model(guess)
         self.assertTrue(outcome["root_cause_correct"])
         self.assertEqual((outcome["evidence_valid"], outcome["resolved"]), (False, False))
+
+    def test_citing_an_unseen_event_is_invalid_evidence(self):
+        outcome = self.run_model(honest_with(lambda packet: [*evidence(packet), "ev-0002"]))
+        self.assertEqual((outcome["root_cause_correct"], outcome["evidence_valid"], outcome["resolved"]),
+                         (True, False, False))
 
     def test_a_diagnosis_without_a_fix_is_the_wrong_decision(self):
         outcome = self.run_model(scripted(*INVESTIGATE, lambda packet: decide("diagnose", evidence(packet))))

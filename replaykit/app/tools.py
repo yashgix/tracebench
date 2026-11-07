@@ -4,9 +4,9 @@ only the incident bundle, so truth, the reference fix and the protected tests ar
 import re
 
 from ..tools import LAST, Evidence
+from ..tools import TOOLS as TELEMETRY_TOOLS
 
-TOOLS = ("topology", "overview", "alerts", "metrics", "logs", "deploys", "traces", "commits", "diff", "source",
-         "search")
+TOOLS = (*TELEMETRY_TOOLS, "traces", "commits", "diff", "source", "search")
 METRICS = ("http.server.request.count", "http.server.error_rate", "http.server.duration.p95",
            "db.client.connections.usage", "db.client.connections.pending_requests")
 TRACES, DIFF_LINES, SOURCE_LINES, HITS, TEXT = 5, 200, 80, 20, 200
@@ -28,7 +28,7 @@ class CodeEvidence(Evidence):
 
     def _dispatch(self, tool, call):
         service, arg = call["service"], call["arg"]
-        if tool in TOOLS[:6]:
+        if tool in TELEMETRY_TOOLS:
             return super()._dispatch(tool, {"tool": tool, "service": service, "metric": arg, "level": arg})
         if tool == "traces":
             return self._traces(self._service(service), arg)

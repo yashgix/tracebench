@@ -41,8 +41,9 @@ Fault types:
 
 Patch rules (a patch that breaks them is rejected and you may try again):
 - A unified diff with "--- a/<path>" and "+++ b/<path>" headers and "@@" hunks, against the code deployed for the
-  service you name. Only files under shop/, except shop/runtime.py and shop/telemetry.py; never tests.
-- At most 40 changed lines. No new imports. Keep all other behaviour the same.
+  service you name. Only files under shop/, except shop/pool.py, shop/runtime.py and shop/telemetry.py; never tests.
+- At most 40 changed lines. No new imports, no names with "__", no print, exit, eval or file access. Keep all other
+  behaviour the same.
 - After you decide, the patch is checked by tests you cannot see and by replaying the same traffic. You never see
   the result.
 

@@ -1,23 +1,31 @@
-"""A model's patch is untrusted text. It is checked statically, applied to a fresh clone at the deployed commit, and
-judged by the app's own tests, the protected tests and the same traffic, each in a separate process (trusted side)."""
+"""A model's patch is untrusted text. It is checked as text, applied to a fresh clone at the deployed commit, checked
+again as code, and judged by the app's own tests, the protected checks and the same traffic, each in a separate
+sandboxed process (trusted side)."""
 
+import ast
 import json
 import re
 import subprocess
 import sys
 import tempfile
+from collections import Counter
 from pathlib import Path
 
 from . import incident
 
 MAX_CHANGED, MAX_BYTES, TIMEOUT_S = 40, 8000, 120
 PATH = re.compile(r"shop/[a-z_]+\.py")
-LOCKED = ("shop/runtime.py", "shop/telemetry.py")  # the clock and the telemetry the replay is judged by
-FORBIDDEN = re.compile(r"\bimport\b|__|\b(?:exec|eval|open|compile|globals|locals|vars|getattr|setattr|delattr|"
-                       r"sys|os|builtins)\b")
+LOCKED = ("shop/pool.py", "shop/runtime.py", "shop/telemetry.py")  # what the checks and the replay measure with
+DENIED = ("exec", "eval", "open", "compile", "globals", "locals", "vars", "getattr", "setattr", "delattr", "exit",
+          "quit", "print", "breakpoint", "input", "help", "sys", "os", "builtins", "sqlite3", "subprocess")
+INTERNALS = ("spans", "logs", "gauges", "in_use", "opened", "now", "_idle", "_waiters", "_queue", "_connect")
+SQL = ("ATTACH", "DETACH", "VACUUM", "PRAGMA", "LOAD_EXTENSION")
+FORBIDDEN = re.compile(rf"\bimport\b|__|\b(?:{'|'.join(DENIED)})\b|(?i:\b(?:{'|'.join(SQL)})\b)")
+BREAKS = re.compile("[\r\x0b\x0c\x1c\x1d\x1e\x85\u2028\u2029]")  # line ends to Python, not to git
 META = re.compile(r"diff --git a/(\S+) b/\1|index [0-9a-f]+\.\.[0-9a-f]+(?: 100644)?")
 PROTECTED = Path(__file__).resolve().parent / "protected"
 ROOT = Path(__file__).resolve().parents[2]
+CHECKS = sum(f.read_text().count("    def test_") for f in PROTECTED.glob("check_*.py"))
 GIT_ENV = {"PATH": "/usr/bin:/bin", "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_CONFIG_NOSYSTEM": "1",
            "GIT_AUTHOR_DATE": "2026-11-07T00:00:00Z", "GIT_COMMITTER_DATE": "2026-11-07T00:00:00Z"}
 
@@ -35,13 +43,16 @@ def check_patch(text):
     """Return (files, changed lines) of a unified diff that only modifies allowed app files; raise ValueError."""
     if not text or len(text.encode()) > MAX_BYTES:
         raise ValueError(f"a patch must be 1 to {MAX_BYTES} bytes")
-    lines, files, changed, hunk, i = text.splitlines(), set(), 0, False, 0
+    if BREAKS.search(text):
+        raise ValueError("a patch may end lines only with \\n")
+    lines, files, changed, hunk, named, i = text.removesuffix("\n").split("\n"), set(), 0, False, None, 0
     while i < len(lines):
         line = lines[i]
         if line.startswith("--- ") and i + 1 < len(lines) and lines[i + 1].startswith("+++ "):
             old, new = _file("--- a/", line), _file("+++ b/", lines[i + 1])
-            if old != new:
-                raise ValueError("a patch must not rename files")
+            if old != new or named not in (None, new):
+                raise ValueError("a patch must name the same file in all its headers")
+            named = None
             files.add(new)
             hunk, i = False, i + 2
             continue
@@ -51,8 +62,9 @@ def check_patch(text):
             changed += 1
             if line[0] == "+" and FORBIDDEN.search(line[1:]):
                 raise ValueError(f"added lines must not import or reach internals: {line[:60]!r}")
-        elif not (hunk and (line[:1] == " " or line == "" or line == "\\ No newline at end of file")) \
-                and not META.fullmatch(line):
+        elif meta := META.fullmatch(line):
+            named = meta.group(1) or named
+        elif not (hunk and (line[:1] == " " or line == "" or line == "\\ No newline at end of file")):
             raise ValueError(f"not a plain unified diff line: {line[:60]!r}")
         i += 1
     if not files or not changed:
@@ -70,6 +82,14 @@ def _run(args, cwd, env=None, stdin=None):
         return None
 
 
+def _sandboxed(args, cwd, folder):
+    """Run patched code with no network and no writes outside *folder*."""
+    profile = (f'(version 1)(allow default)(deny network*)(deny file-write*)'
+               f'(allow file-write* (subpath "{Path(folder).resolve()}") (literal "/dev/null"))')
+    env = {"PATH": "/usr/bin:/bin", "TMPDIR": str(folder)}
+    return _run(["/usr/bin/sandbox-exec", "-p", profile, sys.executable, "-B", *args], cwd, env)
+
+
 def _apply(repo, base, patch, clone):
     """Commit *patch* on *base* in a fresh *clone* and return the new commit's short hash."""
     git = ["git", "-C", str(clone), "-c", "user.name=replaykit", "-c", "user.email=replaykit@example.invalid"]
@@ -77,24 +97,68 @@ def _apply(repo, base, patch, clone):
              ("checkout", [*git, "checkout", "-q", "--detach", base], None),
              ("apply", [*git, "apply", "--check", "--recount", "-"], patch),
              ("apply", [*git, "apply", "--recount", "-"], patch),
-             ("commit", [*git, "commit", "-q", "-a", "-m", "candidate patch"], None)]
+             ("commit", [*git, "commit", "-q", "-a", "-m", "candidate patch"], None),
+             ("rev-parse", [*git, "rev-parse", "--short=7", "HEAD"], None)]
     for name, args, stdin in steps:
         done = _run(args, clone.parent, GIT_ENV, stdin)
         if done is None or done.returncode:
             raise ValueError(f"git {name} failed: {done.stderr.strip()[:300] if done else 'timeout'}")
-    return _run([*git, "rev-parse", "--short=7", "HEAD"], clone.parent, GIT_ENV).stdout.strip()
+    return done.stdout.strip()
+
+
+def _flags(source):
+    """What a patch may not add: imports, dunders, denied names and SQL, the harness's internals."""
+    found = Counter()
+    for node in ast.walk(ast.parse(source)):
+        if isinstance(node, (ast.Import, ast.ImportFrom)):
+            found["import"] += 1
+        elif isinstance(node, ast.Name) and (node.id in DENIED or node.id.startswith("__")):
+            found[node.id] += 1
+        elif isinstance(node, ast.Attribute) and (node.attr in INTERNALS or node.attr.startswith("__")):
+            found["." + node.attr] += 1
+        elif isinstance(node, ast.Constant) and isinstance(node.value, str):
+            found.update(word for word in SQL if word in node.value.upper())
+    return found
+
+
+def _check_code(repo, base, clone, files):
+    for path in files:
+        before = subprocess.run(["git", "--git-dir", str(Path(repo) / ".git"), "show", f"{base}:{path}"],
+                                capture_output=True, text=True, check=True, env=GIT_ENV).stdout
+        try:
+            added = _flags((clone / path).read_text()) - _flags(before)
+        except SyntaxError as exc:
+            raise ValueError(f"the patched {path} does not parse: {exc.msg}") from None
+        if added:
+            raise ValueError(f"the patch adds {', '.join(sorted(added))} to {path}")
 
 
 def _own_tests(clone):
-    done = _run([sys.executable, "-B", "-m", "unittest", "discover", "-s", "tests"], clone)
+    done = _sandboxed(["-m", "unittest", "discover", "-s", "tests"], clone, clone.parent)
     return "timeout" if done is None else ("pass" if done.returncode == 0 else "fail")
 
 
-def _protected(clone):
-    done = _run([sys.executable, "-I", "-B", str(PROTECTED / "run.py"), str(clone)], clone.parent)
+def _result(done, keys):
+    """The JSON object a check printed, or None unless it has exactly *keys*."""
     if done is None or done.returncode:
-        return {"run": 0, "failed": ["timeout" if done is None else "crashed"]}
-    return json.loads(done.stdout)
+        return None
+    try:
+        result = json.loads(done.stdout)
+    except ValueError:
+        return None
+    return result if isinstance(result, dict) and set(result) == set(keys) else None
+
+
+def protected_result(result):
+    """*result* if it is a complete run of every protected check, else a failed one."""
+    if result is None or result["run"] != CHECKS or not isinstance(result["failed"], list):
+        return {"run": 0, "failed": ["incomplete"]}
+    return result
+
+
+def _protected(clone):
+    done = _sandboxed(["-I", str(PROTECTED / "run.py"), str(clone)], clone.parent, clone.parent)
+    return protected_result(_result(done, ("run", "failed")))
 
 
 def _replay(clone, case, service, base, patched):
@@ -102,11 +166,12 @@ def _replay(clone, case, service, base, patched):
                for d in case["deploys"]]
     if deploys == case["deploys"]:
         deploys = [{"at_ms": 0, "service": service, "commit": patched}, *deploys]
-    done = _run([sys.executable, "-B", "-m", "replaykit.app.patch", str(clone),
-                 json.dumps(case | {"deploys": deploys})], ROOT)
-    if done is None or done.returncode:
+    done = _sandboxed(["-m", "replaykit.app.patch", str(clone), json.dumps(case | {"deploys": deploys})], ROOT,
+                      clone.parent)
+    result = _result(done, ("page", "pool_in_use_end", "web_errors", "clean"))
+    if result is None or not isinstance(result["clean"], bool):
         return {"page": None, "pool_in_use_end": None, "web_errors": None, "clean": False}
-    return json.loads(done.stdout)
+    return result
 
 
 def replay_summary(repo, case):
@@ -130,6 +195,7 @@ def validate_patch(repo, case, decision, base):
             clone = Path(folder) / "repo"
             patch = decision["patch"] if decision["patch"].endswith("\n") else decision["patch"] + "\n"
             patched = _apply(repo, base, patch, clone)
+            _check_code(repo, base, clone, result["files"])
             result["applies"] = True
             result["own_tests"] = _own_tests(clone)
             result["protected"] = _protected(clone)
@@ -138,7 +204,7 @@ def validate_patch(repo, case, decision, base):
         result["error"] = str(exc)
         return result
     result["valid"] = (result["own_tests"] == "pass" and not result["protected"]["failed"]
-                       and result["protected"]["run"] > 0 and result["replay"]["clean"])
+                       and result["replay"]["clean"])
     return result
 
 
