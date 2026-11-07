@@ -102,7 +102,8 @@ The **action** (the given `replaykit/investigator/action.schema.json`) is a dict
 1. `evidence = Evidence(incident)`; `history = []`.
 2. Before each turn, stop with outcome `"budget_exhausted"` if `limits.turns` turns were used, or the tokens used
    (input plus output over all replies) reached `limits.tokens`, or the model time used (sum of `latency_ms`) reached
-   `limits.model_ms`.
+   `limits.model_ms`. These limits are soft: checked before each turn only, so the turn that crosses one may take the
+   totals past it by that turn's tokens or model time. The broker records any overshoot.
 3. Call `model(incident.id, turn, packet)` with `turn` counting from 1 and the **packet**
    `{"history": history, "now": evidence.now, "trigger": evidence.trigger}`. The packet never holds truth or later
    events.
