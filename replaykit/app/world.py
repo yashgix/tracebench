@@ -47,9 +47,18 @@ class Deployment:
     def __init__(self, platform, seed, db_name, stock):
         self.runtime = platform["runtime"].Runtime()
         self.telemetry = platform["telemetry"].Telemetry(self.runtime, random.Random(f"{seed}:ids"))
-        self.connect = platform["db"].connector(db_name)
+        self._connector, self._opened = platform["db"].connector(db_name), []
         self.keeper = platform["db"].create(self.connect, stock)
         self.services, self.deploys = {}, []
+
+    def connect(self):
+        self._opened.append(self._connector())
+        return self._opened[-1]
+
+    def close(self):
+        """Close every database connection, leaked ones included, once the run is recorded."""
+        for connection in self._opened:
+            connection.close()
 
     def deploy(self, service, code, commit):
         """Start *service* from *code* (a loaded package) at the current time, replacing the running one."""

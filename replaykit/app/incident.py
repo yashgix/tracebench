@@ -27,6 +27,7 @@ def run_case(repo, case):
                                                                                  d["commit"]))
         world.traffic(deployment, case["seed"], skus, weights, case["duration_ms"])
         deployment.runtime.run(case["duration_ms"] + DRAIN_MS)
+        deployment.close()
     telemetry = deployment.telemetry
     metrics = world.request_metrics(telemetry.spans, case["duration_ms"])
     return {"spans": list(telemetry.spans), "logs": list(telemetry.logs), "gauges": list(telemetry.gauges),
