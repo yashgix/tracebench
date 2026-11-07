@@ -77,6 +77,9 @@ starting with the trigger's id).
 Metric values are rounded with `round(value, 3)`. Arguments a tool does not use are ignored. A problem gives
 `{"tool": <tool as given>, "error": <message>}` and adds nothing to `observed`: an unknown tool, an unknown service, a
 `"*"` where a name is needed, an unknown metric or level.
+The message is exact, as it enters the history (N3): `unknown tool <tool>`, `unknown service <service>` (also for a
+`"*"` where a name is needed), `unknown metric <metric>` or `unknown level <level>`, where `<x>` is Python's `repr`
+of the value given (e.g. `unknown service '*'`). The tool is checked first, then `service`, then `metric` or `level`.
 
 ## N3. The investigator loop (`replaykit/investigate.py`)
 
@@ -98,6 +101,23 @@ The **action** (the given `replaykit/investigator/action.schema.json`) is a dict
 - `"escalate"`: no calls, `service` in `services` or `"-"` (no suspect);
 - `"dismiss"`: no calls.
 
+The checks run in this order, and the `ValueError` message is exactly the first failing one's (messages enter the
+history, so the packet hash; `<x>` is Python's `repr`):
+1. not a dict with exactly the action keys:
+   `action must have exactly the keys ['act', 'calls', 'service', 'fault_type', 'confidence', 'evidence', 'summary']`;
+2. `act`: `unknown act <act>`;
+3. `service`, `fault_type` or `summary` not a str: `service, fault_type and summary must be strings`;
+4. `confidence`: `confidence must be an int in 0..100`;
+5. `evidence`: `evidence must be a list of at most 8 strings`;
+6. `calls` not a list of at most 3: `calls must be a list of at most 3 tool calls`;
+7. each call in order: not a dict with exactly the call keys,
+   `a call must have exactly the keys ['tool', 'service', 'metric', 'level']`; a field not a str,
+   `call fields must be strings`;
+8. `"call"` with no calls: `a call turn needs 1 to 3 calls`; any other act with calls: `<act> must not have calls`
+   with the act unquoted (e.g. `diagnose must not have calls`);
+9. `"diagnose"`: `unknown service <service>`, then `unknown fault type <fault_type>`, then
+   `a diagnosis needs 1 to 8 evidence ids`; `"escalate"`: `unknown service <service>`.
+
 `investigate(incident, model, limits=Limits()) -> Investigation` runs the loop:
 1. `evidence = Evidence(incident)`; `history = []`.
 2. Before each turn, stop with outcome `"budget_exhausted"` if `limits.turns` turns were used, or the tokens used
@@ -113,7 +133,8 @@ The **action** (the given `replaykit/investigator/action.schema.json`) is a dict
    any other act, stop with outcome `"decided"`.
 5. A reply with kind `"invalid"`, or kind `"ok"` with an action that `parse_action` rejects: append
    `{"turn", "act": "invalid", "error": <message>, "turns_left", "tool_calls_left"}` and continue; the second
-   invalid turn in a row stops with outcome `"invalid_output"`.
+   invalid turn in a row stops with outcome `"invalid_output"`. The message is
+   `"the reply did not match the action schema"` for kind `"invalid"`, else the `parse_action` message.
 6. Any other kind stops with outcome `f"model_{kind}"`.
 
 `turns_left` and `tool_calls_left` are what remains after that turn. `Investigation` (a frozen dataclass) has, in this
