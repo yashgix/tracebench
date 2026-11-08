@@ -27,12 +27,14 @@ def source(commit, path):
     return dict(world.blobs(REPO, commit))[Path(path)].decode()
 
 
-def edit(commit, path, old, new):
-    """A unified diff that replaces *old* with *new* in *path* at *commit*."""
-    before = source(commit, path)
-    if before.count(old) != 1:
-        raise AssertionError(f"{old!r} must occur once in {path}")
-    after = before.replace(old, new)
+def edit(commit, path, old, new, *more):
+    """A unified diff that replaces *old* with *new* (and each further old, new pair) in *path* at *commit*."""
+    before = after = source(commit, path)
+    pairs = (old, new, *more)
+    for old, new in zip(pairs[::2], pairs[1::2]):
+        if after.count(old) != 1:
+            raise AssertionError(f"{old!r} must occur once in {path}")
+        after = after.replace(old, new)
     return "".join(difflib.unified_diff(before.splitlines(True), after.splitlines(True), f"a/{path}", f"b/{path}"))
 
 

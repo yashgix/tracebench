@@ -21,6 +21,18 @@ class LimitChecks(unittest.TestCase):
         self.assertIn(503, done)
         self.assertGreaterEqual(done.count(200), 5)
 
-    def test_the_limit_ends_with_its_window(self):
-        done = statuses(self.app, [(100, self.buy("bot"))] * 8 + [(5_100, self.buy("bot"))], until=10_000)
-        self.assertEqual(done[-1], 200)
+    def test_the_limit_holds_for_one_second_then_starts_again(self):
+        times = [100] * 6 + [900] + [1_100] * 6
+        self.assertEqual(self.at(times), [200] * 5 + [503, 503] + [200] * 5 + [503])
+
+    def at(self, times):
+        """The status of one busy user's checkout started at each of *times* (ms), in that order."""
+        done = {}
+
+        async def buy(n):
+            done[n] = await self.buy("bot")()
+
+        for n, at in enumerate(times):
+            self.app.runtime.spawn(buy(n), at=at)
+        self.app.runtime.run(10_000)
+        return [done.get(n) for n in range(len(times))]

@@ -50,14 +50,19 @@ Incident ids are opaque (`shop-app:c<N>:<seed>`), so neither ids nor run descrip
   rejected reply: one more try). After a fresh clone at the deployed commit and `git apply`, an AST comparison
   refuses any new import, dunder, store or delete of an instrument setting, and any new name or attribute in `REACH`
   (denied names, every standard-library module name, the interpreter's handles, `.execute` and the other SQL entry
-  points) or among the harness internals (a break here makes the patch invalid).
+  points) or among the harness internals, and any new way of handing `db.query` or `Pool` a clock other than the
+  app's own (`self.runtime`; for `Pool` also its `runtime` argument), including any other reference to them and any
+  store to `runtime` (a break here makes the patch invalid).
 - Then three runs: the app's own tests, the case's protected checks (`run.py <tree> <check files>`), and the same
   traffic with the patched commit deployed. Valid = own tests pass, every protected check runs and passes, and the
   replay is clean (no page, pool back to 0). A patch counts as the decision's fix only if it changes the decision's
   file. Each case lists its protected checks: its own and the earlier ones that apply to its code
   (`replaykit/app/protected/check_*.py`, never in the bundle, never shown to the model): `check_inventory` (connections
-  come back), `check_limits` (one busy user is slowed, a product's many buyers are not), `check_orders` (an order over
-  the cap is a 4xx and takes no stock), `check_lookup` (any case matches, under 50 ms in 6,000 rows). Reference fixes:
+  come back), `check_limits` (one busy user is slowed for one second, then served again at 1.1 s; a product's many buyers are
+  not), `check_orders` (an order over
+  the cap is a 4xx and takes no stock), `check_lookup` (any case matches, under 50 ms in 6,000 rows, and the
+  statements SQLite actually ran, traced on every connection and explained on the check's own, search `items` by
+  its index and never scan it). Reference fixes:
   `protected/<case>.patch`.
 - **Boundary:** the patched code runs only inside those three runs. For any model-written patch they run as the
   `_arcexec` account through the coordinator's existing `sandbox.run` (Seatbelt, no network, the home folder hidden,

@@ -1,6 +1,9 @@
 """SPEC-4 B2: the five cases after the leak, each produced by running the app, with scripted investigations."""
 
 import json
+import subprocess
+import sys
+import tempfile
 import unittest
 from functools import cache
 from pathlib import Path
@@ -10,10 +13,28 @@ from replaykit.app import cases
 from replaykit.app.bundle import bundle
 from replaykit.app.evaluate import run_app_case
 from replaykit.app.incident import run_case
-from replaykit.app.patch import ROOT, check_patch, validate_patch
+from replaykit.app.patch import PROTECTED, ROOT, _apply, check_patch, validate_patch
 
 FIXES = {name: (ROOT / "replaykit/app/protected" / f"{name}.patch").read_text()
          for name in ("config", "decoy", "slow_query")}
+# Codex's wrong fixes (chatgpt/85): a clock that drops the scan's cost, and per_user(5000).
+QUERY = "return await db.query(self.runtime, connection, sql, params)"
+FAKE = ('return await db.query(type("Clock", (), {"sleep": lambda _, ms: self.runtime.sleep(config.QUERY_MS)})(), '
+        'connection, sql, params)')
+LOOKUP = 'rows = await self._query(connection, "SELECT stock FROM items WHERE lower(sku) = lower(?)", (sku,))\n'
+FAKE_CLOCK = edit(cases.ANY_CASE, "shop/inventory.py", QUERY, FAKE)
+# The reference fix and a fake clock, plus a full scan of items beside the indexed lookup.
+SCAN_BESIDE = edit(cases.ANY_CASE, "shop/inventory.py", QUERY, FAKE, LOOKUP, LOOKUP.replace("lower(sku)", "sku")
+                   + ' ' * 16 + 'await self._query(connection, "SELECT count(*) FROM items", ())\n')
+
+
+def per_user(window_ms):
+    return edit(cases.PER_PRODUCT, "shop/config.py", 'CHECKOUT_LIMIT_KEY = "sku"\nCHECKOUT_LIMIT_WINDOW_MS = 60000',
+                f'CHECKOUT_LIMIT_KEY = "user"\nCHECKOUT_LIMIT_WINDOW_MS = {window_ms}')
+
+
+WINDOW_CHECK = "check_limits.LimitChecks.test_the_limit_holds_for_one_second_then_starts_again"
+INDEX_CHECK = "check_lookup.LookupChecks.test_a_lookup_reads_the_catalogue_through_its_index"
 # The commit right after each defect: its fix on main.
 FIXED = {"config": cases.PER_USER, "decoy": "4a4338c", "slow_query": cases.LOWER_CASED}
 
@@ -102,7 +123,7 @@ class CasePatchTest(unittest.TestCase):
     def test_a_higher_product_limit_is_caught(self):
         wrong = edit(cases.PER_PRODUCT, "shop/config.py", "CHECKOUT_LIMIT = 5", "CHECKOUT_LIMIT = 1000")
         failed = self.assertValid("config", wrong, False)["protected"]["failed"]
-        self.assertEqual(failed, ["check_limits.LimitChecks.test_one_busy_user_is_slowed_down"])
+        self.assertEqual(failed, ["check_limits.LimitChecks.test_one_busy_user_is_slowed_down", WINDOW_CHECK])
 
     def test_dropping_the_order_cap_is_caught(self):
         wrong = edit(cases.ORDER_CAP, "shop/orders.py", '''            if quantity > config.MAX_ORDER_ITEMS:
@@ -116,12 +137,33 @@ class CasePatchTest(unittest.TestCase):
         outcome = self.assertValid("slow_query", wrong, False)
         self.assertEqual((outcome["own_tests"], outcome["replay"]["clean"]), ("fail", False))
         self.assertEqual(outcome["protected"]["failed"],
-                         ["check_lookup.LookupChecks.test_a_lookup_in_a_large_catalogue_is_quick"])
+                         ["check_lookup.LookupChecks.test_a_lookup_in_a_large_catalogue_is_quick", INDEX_CHECK])
 
     def test_a_per_product_limit_per_second_is_caught(self):
         wrong = edit(cases.PER_PRODUCT, "shop/config.py", "CHECKOUT_LIMIT_WINDOW_MS = 60000", "CHECKOUT_LIMIT_WINDOW_MS = 1000")
         failed = self.assertValid("config", wrong, False)["protected"]["failed"]
         self.assertEqual(failed, ["check_limits.LimitChecks.test_many_customers_can_buy_one_product"])
+
+    def test_a_per_user_window_other_than_one_second_is_caught(self):
+        for window_ms in (5000, 500):
+            with self.subTest(window_ms=window_ms):
+                failed = self.assertValid("config", per_user(window_ms), False)["protected"]["failed"]
+                self.assertEqual(failed, [WINDOW_CHECK])
+
+    def test_a_fake_query_clock_is_refused_before_it_runs(self):
+        outcome = self.assertValid("slow_query", FAKE_CLOCK, False)
+        self.assertEqual((outcome["applies"], outcome["own_tests"]), (False, None))
+        self.assertIn("clock", outcome["error"])
+
+    def test_the_index_check_alone_catches_a_fake_query_clock(self):
+        # Without the clock rule: the patch applied by hand, only check_lookup run against it.
+        for name, patch in (("fake clock", FAKE_CLOCK), ("scan beside the index", SCAN_BESIDE)):
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as folder:
+                clone = Path(folder) / "repo"
+                _apply(REPO, cases.ANY_CASE, patch, clone)
+                done = subprocess.run([sys.executable, "-I", "-B", str(ROOT / PROTECTED / "run.py"), str(clone),
+                                       "check_lookup.py"], capture_output=True, text=True, check=True)
+                self.assertEqual(json.loads(done.stdout), {"run": 4, "failed": [INDEX_CHECK]})
 
     def test_dropping_the_any_case_lookup_is_caught(self):
         wrong = edit(cases.ANY_CASE, "shop/inventory.py", "WHERE lower(sku) = lower(?)", "WHERE sku = ?")
@@ -149,6 +191,19 @@ class InstrumentTest(unittest.TestCase):
             with self.subTest(added=added):
                 self.assertEqual((outcome["applies"], outcome["valid"]), (False, False))
                 self.assertIn("setting", outcome["error"])
+
+    def test_handing_a_timer_another_clock_is_refused(self):
+        query, method = "db.query(self.runtime, connection, sql, params)", "    async def report_pool(self):\n"
+        tries = {"alias": (method, method + "        _unused = db.query\n"),
+                 "other clock": (query, "db.query(self.telemetry, connection, sql, params)"),
+                 "keyword": (query, "db.query(connection=connection, sql=sql, params=params, runtime=self.runtime)"),
+                 "rebound runtime": (method, method + "        self.runtime = self.telemetry\n"),
+                 "pool clock": ("Pool(runtime, connect", "Pool(self.telemetry, connect")}
+        for name, (old, new) in tries.items():
+            outcome = validate("slow_query", edit(cases.ANY_CASE, "shop/inventory.py", old, new))
+            with self.subTest(name=name):
+                self.assertEqual((outcome["applies"], outcome["own_tests"]), (False, None))
+                self.assertIn("clock", outcome["error"])
 
     def test_non_ascii_added_lines_are_refused(self):
         patch = edit(cases.ORDER_CAP, "shop/orders.py", "items per order", "items per order \u2014 sorry")

@@ -25,7 +25,7 @@ DENIED = ("exec", "eval", "open", "compile", "globals", "locals", "vars", "getat
 # through modules the app imports), the interpreter's handles, and the database calls that run SQL.
 REACH = frozenset({*DENIED, *sys.stdlib_module_names, "bltns", "modules", "argv", "stdin", "stdout", "stderr",
                    "execute", "executemany", "executescript", "enable_load_extension", "create_function",
-                   "set_authorizer"})
+                   "set_authorizer", "set_trace_callback"})
 INTERNALS = ("spans", "logs", "gauges", "in_use", "opened", "now", "_idle", "_waiters", "_queue", "_connect")
 SQL = ("ATTACH", "DETACH", "VACUUM", "PRAGMA", "LOAD_EXTENSION")
 FORBIDDEN = re.compile(rf"\bimport\b|__|\b(?:{'|'.join(DENIED)})\b|(?i:\b(?:{'|'.join(SQL)})\b)")
@@ -141,14 +141,35 @@ def _apply(repo, base, patch, clone):
     return done.stdout.strip()
 
 
+def _timer(node):
+    """Whether *node* names a helper that is given the clock: `db.query` or `Pool`."""
+    return (isinstance(node, ast.Name) and node.id == "Pool") or (
+        isinstance(node, ast.Attribute) and node.attr == "query" and isinstance(node.value, ast.Name)
+        and node.value.id == "db")
+
+
+def _clocked(call):
+    """Whether *call* hands its timer the app's own clock (`self.runtime`; for `Pool`, also the `runtime` argument)."""
+    first = ast.unparse(call.args[0]) if call.args else None
+    return first == "self.runtime" or (first == "runtime" and isinstance(call.func, ast.Name))
+
+
+def _stored(node, names):
+    """Whether *node* assigns or deletes a name or attribute in *names*."""
+    return isinstance(node, (ast.Name, ast.Attribute)) and isinstance(node.ctx, (ast.Store, ast.Del)) and (
+        getattr(node, "id", None) in names or getattr(node, "attr", None) in names)
+
+
 def _flags(source):
-    """What a patch may not add: imports, dunders, denied names and SQL, the harness's internals."""
-    found = Counter()
-    for node in ast.walk(ast.parse(source)):
-        if isinstance(node, (ast.Import, ast.ImportFrom)):
+    """What a patch may not add: imports, dunders, denied names and SQL, the harness's internals, another clock."""
+    tree, found = ast.parse(source), Counter()
+    timed = {id(n.func) for n in ast.walk(tree) if isinstance(n, ast.Call) and _timer(n.func) and _clocked(n)}
+    for node in ast.walk(tree):
+        if (_timer(node) and id(node) not in timed) or _stored(node, ("runtime",)):
+            found["clock"] += 1
+        elif isinstance(node, (ast.Import, ast.ImportFrom)):
             found["import"] += 1
-        elif isinstance(node, (ast.Name, ast.Attribute)) and isinstance(node.ctx, (ast.Store, ast.Del)) and (
-                getattr(node, "id", None) in SETTINGS or getattr(node, "attr", None) in SETTINGS):
+        elif _stored(node, SETTINGS):
             found["setting"] += 1
         elif isinstance(node, ast.Name) and (node.id in REACH or node.id.startswith("__")):
             found[node.id] += 1
