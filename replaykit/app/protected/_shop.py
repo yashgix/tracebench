@@ -20,9 +20,9 @@ def telemetry(runtime):
     return Telemetry(runtime, random.Random(1))
 
 
-def shop(stock):
+def shop(stock, name=None):
     runtime = Runtime()
-    return Shop(runtime, telemetry(runtime), db_name(), stock)
+    return Shop(runtime, telemetry(runtime), name or db_name(), stock)
 
 
 def statuses(app, requests, until=60_000):

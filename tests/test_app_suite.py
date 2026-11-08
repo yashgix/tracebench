@@ -195,5 +195,5 @@ class AppBaselineTest(unittest.TestCase):
     def test_reverts_are_judged_like_any_patch(self):
         self.assertTrue(validate("config", revert_last_deploy(incident("config"))["patch"])["valid"])
         failed = validate("slow_query", revert_last_deploy(incident("slow_query"))["patch"])["protected"]["failed"]
-        self.assertEqual(failed, ["check_lookup.LookupChecks.test_a_lookup_shows_a_reservation",
+        self.assertEqual(failed, ["check_lookup.LookupChecks.test_a_lookup_shows_the_stock_in_the_database",
                                   "check_lookup.LookupChecks.test_any_case_finds_the_product"])

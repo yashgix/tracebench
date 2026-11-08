@@ -49,7 +49,7 @@ def per_user(window_ms):
 
 WINDOW_CHECK = "check_limits.LimitChecks.test_the_limit_holds_for_one_second_then_starts_again"
 INDEX_CHECK = "check_lookup.LookupChecks.test_a_lookup_reads_the_catalogue_through_its_index"
-RESERVATION_CHECK = "check_lookup.LookupChecks.test_a_lookup_shows_a_reservation"
+RESERVATION_CHECK = "check_lookup.LookupChecks.test_a_lookup_shows_the_stock_in_the_database"
 # The commit right after each defect: its fix on main.
 FIXED = {"config": cases.PER_USER, "decoy": "4a4338c", "slow_query": cases.LOWER_CASED}
 
@@ -238,12 +238,21 @@ class CasePatchTest(unittest.TestCase):
                  "dropped before the update": (*KNOWN, LOOKUP, CACHE_READ + CACHE_ROWS,
                                                RESERVE_READ, CACHE_DROP + RESERVE_READ),
                  # Read before the update, stored after the drop: caught only when no read filled the cache first.
-                 "stored late": (*KNOWN, LOOKUP, stored_late + CACHE_ROWS, UPDATE, UPDATE + CACHE_DROP)}
+                 "stored late": (*KNOWN, LOOKUP, stored_late + CACHE_ROWS, UPDATE, UPDATE + CACHE_DROP),
+                 # Codex's (chatgpt/97): two overlapping reservations both read 8 and both store 5; the database has 2.
+                 "set after the update": (*KNOWN, LOOKUP, CACHE_READ + CACHE_ROWS, UPDATE, UPDATE + " " * 16
+                                          + "self.known[sku.lower()] = [(stock - quantity,)]\n")}
         for name, pairs in tries.items():
             with self.subTest(name=name):
                 failed = self.assertValid("slow_query", edit(cases.ANY_CASE, "shop/inventory.py", *pairs),
                                           False)["protected"]["failed"]
                 self.assertEqual(failed, [RESERVATION_CHECK])
+
+    def test_a_reservation_that_loses_an_overlapping_one_is_caught(self):
+        # Each writes back the stock it read, so the second of two overlapping reservations undoes the first.
+        lost = UPDATE.replace("stock = stock - ?", "stock = ?").replace("(quantity, sku)", "(stock - quantity, sku)")
+        patch = edit(cases.ANY_CASE, "shop/inventory.py", LOOKUP, LOOKUP.replace("lower(sku)", "sku"), UPDATE, lost)
+        self.assertEqual(self.assertValid("slow_query", patch, False)["protected"]["failed"], [RESERVATION_CHECK])
 
     def test_a_lookup_that_skips_the_database_is_caught(self):
         stock = '[(int(sku.lower().split("-")[1]) % 50 + 1,)] if sku.lower().startswith("sku-") else []'
@@ -263,8 +272,8 @@ class CasePatchTest(unittest.TestCase):
                                      'EXISTS item_lower ON items(lower(sku))", ())\n' + ' ' * 16 + LOOKUP),
                  "a cache dropped after the update": (*KNOWN, LOOKUP, CACHE_READ + CACHE_ROWS,
                                                       UPDATE, UPDATE + CACHE_DROP),
-                 "a cache set after the update": (*KNOWN, LOOKUP, CACHE_READ + CACHE_ROWS, UPDATE, UPDATE + " " * 16
-                                                  + "self.known[sku.lower()] = [(stock - quantity,)]\n")}
+                 # Codex's (chatgpt/97): slow, but finished well inside 50 ms.
+                 "a lookup that waits 25 ms": (LOOKUP, "await self.runtime.sleep(25)\n" + " " * 16 + exact)}
         for name, pairs in fixes.items():
             with self.subTest(name=name):
                 self.assertValid("slow_query", edit(cases.ANY_CASE, "shop/inventory.py", *pairs), True)

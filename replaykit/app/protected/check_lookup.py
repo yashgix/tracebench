@@ -2,10 +2,12 @@
 
 import itertools
 import re
+import sqlite3
 import unittest
 
-from _shop import shop, statements, statuses
+from _shop import db_name, shop, statements, statuses
 from shop.rpc import ServiceError
+from shop.runtime import Future
 
 CATALOGUE = {f"sku-{i:03d}": i % 50 + 1 for i in range(6000)}
 STEP_BUDGET = 200
@@ -21,40 +23,70 @@ class LookupChecks(unittest.TestCase):
         self.assertEqual(statuses(self.app, [(0, lambda: self.app.inventory.stock("SKU-007"))]), [8])
         self.assertEqual(statuses(self.app, [(0, lambda: self.app.web.product("Sku-4321"))]), [200])
 
-    def test_a_lookup_shows_a_reservation(self):
-        # Read in one spelling or not at all, reserve, read in another at every offset into the reservation (that
-        # read may show either stock), then read in all three spellings right after it returns (or not, as that
-        # read can refill a cache) and 60 ms later: each must show the reservation.
-        inventory, requests, allowed = self.app.inventory, [], {}
+    def test_a_lookup_shows_the_stock_in_the_database(self):
+        # One product per trial, one trial after another. Maybe read in one spelling (done before anything else
+        # starts); reserve once or twice (the second up to 8 ms into the first); read in another spelling at every
+        # offset into the first reservation (any stock the database held). Then read in all three spellings right
+        # after the reservations return (or not, as that read can refill a cache) and 60 ms after the trial's last
+        # call: those must show the stock in the database, read on the check's own connection.
+        name = db_name()
+        app = shop(CATALOGUE, name)
+        runtime, inventory, seen, allowed, fresh, products = app.runtime, app.inventory, {}, {}, {}, {}
 
-        def call(at, *steps):
-            """One request at *at* running (key, allowed values, method, *args) steps one after another."""
+        async def ask(key, values, method, *args):
+            allowed[key] = values
+            try:
+                seen[key] = await method(*args)
+            except ServiceError as error:
+                seen[key] = error.status
+
+        def start(at, *step):
+            done = Future()
+
             async def run():
-                done = []
-                for key, _, method, *args in steps:
-                    try:
-                        done.append((key, await method(*args)))
-                    except ServiceError as error:
-                        done.append((key, error.status))
-                return done
-            requests.append((at, run))
-            allowed.update((key, values) for key, values, *_ in steps)
+                await ask(*step)
+                done.resolve()
+            runtime.spawn(run(), at=at)
+            return done
 
-        def reads(n, when, sku, left):
-            return [((n, when, spell.__name__), {left}, inventory.stock, spell(sku)) for spell in SPELLINGS]
+        async def read_all(n, when, sku):
+            for spell in SPELLINGS:
+                fresh[n, when, spell.__name__] = sku
+                await ask((n, when, spell.__name__), None, inventory.stock, spell(sku))
 
-        tries = itertools.product(range(-4, 9), (None, *SPELLINGS), SPELLINGS, (True, False))  # reserving takes 8 ms
-        skus = ((sku, stock) for sku, stock in CATALOGUE.items() if stock > 3)
-        for n, ((offset, first, during, at_once), (sku, stock)) in enumerate(zip(tries, skus)):
-            start, left = n * 100, stock - 3
+        async def trial(n, sku, stock, offset, first, during, second, at_once):
+            gaps = (0,) if second is None else (0, second)
+            left = {stock - 3 * k for k in range(1, len(gaps) + 1)}
+            products[n] = sku, min(left)
             if first:
-                call(start, ((n, "first"), {stock}, inventory.stock, first(sku)))
-            after = reads(n, "after", sku, left) if at_once else []
-            call(start + 20, ((n, "reserve"), {left}, inventory.reserve, sku, 3), *after)
-            call(start + 20 + offset, ((n, "during"), {stock, left}, inventory.stock, during(sku)))
-            call(start + 80, *reads(n, "later", sku, left))
-        seen = dict(pair for done in statuses(self.app, requests) for pair in done)
-        self.assertEqual(seen.keys(), allowed.keys())
+                await ask((n, "first"), {stock}, inventory.stock, first(sku))
+            now = runtime.now
+            reserving = [start(now + 4 + gap, (n, "reserve", i), left, inventory.reserve, sku, 3)
+                         for i, gap in enumerate(gaps)]
+            reading = start(now + offset, (n, "during"), {stock} | left, inventory.stock, during(sku))
+            for done in reserving:
+                await done
+            if at_once:
+                await read_all(n, "after", sku)
+            await reading
+            await runtime.sleep(60)
+            await read_all(n, "later", sku)
+
+        tries = itertools.product(range(13), (None, *SPELLINGS), SPELLINGS, (None, *range(9)), (True, False))
+        plan = list(zip(((sku, stock) for sku, stock in CATALOGUE.items() if stock > 6), tries))
+
+        async def trials():
+            for n, ((sku, stock), args) in enumerate(plan):
+                await trial(n, sku, stock, *args)
+            return len(plan)
+
+        # Simulated time costs nothing; an hour leaves room for lookups near the 50 ms limit.
+        self.assertEqual(statuses(app, [(0, trials)], until=3_600_000), [3120])
+        held = dict(sqlite3.connect(f"file:{name}?mode=memory&cache=shared", uri=True).execute(
+            "SELECT sku, stock FROM items"))
+        allowed.update((key, {held[sku]}) for key, sku in fresh.items())
+        for n, (sku, left) in products.items():
+            seen[n, "database"], allowed[n, "database"] = held[sku], {left}
         self.assertEqual({key: value for key, value in seen.items() if value not in allowed[key]}, {})
 
     def test_a_lookup_in_a_large_catalogue_is_quick(self):
