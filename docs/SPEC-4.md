@@ -62,9 +62,10 @@ Incident ids are opaque (`shop-app:c<N>:<seed>`), so neither ids nor run descrip
   a product's many buyers are not), `check_orders` (an order over
   the cap is a 4xx and takes no stock), `check_lookup` (any case matches, under 50 ms in 6,000 rows, and the
   statements SQLite actually ran, traced on every connection and explained on the check's own, search by an index
-  and never scan a table, under any alias; a second lookup, of another product, takes at most 200 SQLite steps,
-  counted by a progress handler on those connections: correct fixes take 14-22, a range over the whole catalogue
-  36,013). Reference fixes:
+  and never scan a table, under any alias; each of three lookups (`sku-5999`, `sku-4242`, `Sku-4321`, 10 s apart)
+  takes at most 200 SQLite steps, counted per statement by a progress handler on those connections, with only
+  `CREATE INDEX` left out of the first lookup's count: correct fixes take 14-22, a range over the whole catalogue
+  36,013; a lookup shows a reservation made before it). Reference fixes:
   `protected/<case>.patch`.
 - **Boundary:** the patched code runs only inside those three runs. For any model-written patch they run as the
   `_arcexec` account through the coordinator's existing `sandbox.run` (Seatbelt, no network, the home folder hidden,
@@ -98,15 +99,19 @@ escalation or dismissal needs no evidence, so an "always escalate" stub resolves
   patch is run here. `--replay` answers from a saved investigation's transcripts (each packet hash must match), so
   the verifier rebuilds the same bytes.
 - Patch validation is the trusted side's: `validate_app(report, repo, runner)` runs `validate_patch` for every
-  `patch` decision of the verifier's investigation, giving {incident id: {investigator: result}}. Tests and
+  `patch` decision of the verifier's investigation, giving {incident id: {investigator: result plus the patch's
+  sha256}}. Tests and
   rehearsals pass `LocalRunner`; model patches only the `_arcexec` runner.
-- `replaykit score-app INVESTIGATION --validations PATH --out PATH [--md PATH]`: refuses validations that do not
-  cover exactly the patch decisions or whose shape or verdict does not add up, then scores against the truth.
+- `replaykit score-app INVESTIGATION --validations PATH --out PATH [--md PATH]`: refuses an investigation that is not
+  exactly its suite's cases × seeds with one complete record per investigator, and validations that do not cover
+  exactly its patch decisions, are not of that patch (hash), name checks the case does not run, have a replay or a
+  verdict that does not add up; then scores against the truth.
 - The report counts apart, per investigator: decisions (resolved, right decision, escalations and dismissals, false
   ones), diagnosis on the incidents that need a fix (root cause, file and function, evidence valid), remediation
-  (patches, applies, own tests, protected checks, replay clean, valid fix, patches where none was needed, validation
-  timeouts) and effort; then every incident.
+  (patches, applies, own tests, protected checks, replay clean, valid fix, patches where none was needed, validations
+  that did not finish) and effort; then every incident.
 - Rule baselines, labelled in the report: `revert_last_deploy` reverts the newest deploy before the page (any
   service; every page here is on web) and escalates when there was none; `deepest_abnormal_commit` blames the deployed
   commit of the abnormal service lowest in the call graph and dismisses when none looks abnormal. Both read the whole
-  bundle without tools, use thresholds picked for this simulator, and name no function.
+  bundle without tools, use thresholds picked for this simulator, and name no function. A revert of a commit that
+  added or deleted a file breaks the patch rules and is judged not valid (no current case has one).

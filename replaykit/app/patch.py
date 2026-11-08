@@ -33,6 +33,8 @@ BREAKS = re.compile("[\r\x0b\x0c\x1c\x1d\x1e\x85\u2028\u2029]")  # line ends to 
 META = re.compile(r"diff --git a/(\S+) b/\1|index [0-9a-f]+\.\.[0-9a-f]+(?: 100644)?")
 ROOT = Path(__file__).resolve().parents[2]
 PROTECTED = Path("replaykit/app/protected")  # inside a replaykit tree
+RESULT_KEYS = ("files", "changed_lines", "applies", "error", "own_tests", "protected", "replay", "valid")
+REPLAY_KEYS = ("page", "pool_in_use_end", "web_errors", "clean")
 GIT_ENV = {"PATH": "/usr/bin:/bin", "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_CONFIG_NOSYSTEM": "1",
            "GIT_AUTHOR_DATE": "2026-11-07T00:00:00Z", "GIT_COMMITTER_DATE": "2026-11-07T00:00:00Z"}
 
@@ -244,7 +246,7 @@ def _replay(clone, case, service, base, patched, runner):
         deploys = [{"at_ms": 0, "service": service, "commit": patched}, *deploys]
     done = _job(runner, ["-m", "replaykit.app.patch", str(clone), json.dumps(case | {"deploys": deploys})],
                 runner.replaykit, clone)
-    return replay_result(_result(done, ("page", "pool_in_use_end", "web_errors", "clean")))
+    return replay_result(_result(done, REPLAY_KEYS))
 
 
 def replay_summary(repo, case):
@@ -261,8 +263,7 @@ def replay_summary(repo, case):
 def validate_patch(repo, case, decision, base, checks, runner):
     """Judge *decision*'s patch, made against *base* (the commit deployed for its service), on *case* (a run
     description) with the protected *checks* (file names), every job run by *runner*."""
-    result = {"files": [], "changed_lines": 0, "applies": False, "error": None, "own_tests": None,
-              "protected": None, "replay": None, "valid": False}
+    result = dict.fromkeys(RESULT_KEYS) | {"files": [], "changed_lines": 0, "applies": False, "valid": False}
     try:
         result["files"], result["changed_lines"] = check_patch(decision["patch"])
         with tempfile.TemporaryDirectory(dir=runner.root) as folder:
@@ -277,9 +278,14 @@ def validate_patch(repo, case, decision, base, checks, runner):
     except ValueError as exc:
         result["error"] = str(exc)
         return result
-    result["valid"] = (result["own_tests"] == "pass" and not result["protected"]["failed"]
-                       and result["replay"]["clean"])
+    result["valid"] = verdict(result)
     return result
+
+
+def verdict(result):
+    """Whether a validation *result* passes: own tests, every protected check and a clean replay."""
+    return (result["own_tests"] == "pass" and result["protected"] is not None and not result["protected"]["failed"]
+            and result["replay"] is not None and result["replay"]["clean"])
 
 
 if __name__ == "__main__":

@@ -20,12 +20,16 @@ class _ArgumentParser(argparse.ArgumentParser):
         raise ValueError(message)
 
 
-def _load_faults(path):
+def _read_json(path):
     try:
         with open(path, encoding="utf-8") as handle:
-            faults = json.load(handle)
+            return json.load(handle)
     except (json.JSONDecodeError, UnicodeDecodeError) as exc:
         raise ValueError(f"invalid JSON in {path}: {exc}") from None
+
+
+def _load_faults(path):
+    faults = _read_json(path)
     if not isinstance(faults, list):
         raise ValueError(f"{path}: faults must be a JSON list")
     return faults
@@ -130,14 +134,6 @@ def _investigate_command(args):
         _write_markdown(markdown, args.md)
     sys.stdout.write(markdown)
     return 0
-
-
-def _read_json(path):
-    try:
-        with open(path, encoding="utf-8") as handle:
-            return json.load(handle)
-    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
-        raise ValueError(f"invalid JSON in {path}: {exc}") from None
 
 
 def _investigate_app_command(args):

@@ -104,10 +104,32 @@ class AppPipelineTest(unittest.TestCase):
                  "verdict flipped": lambda v: v[some_id]["fake-model"].update(valid=not one["valid"]),
                  "wrong type": lambda v: v[some_id]["fake-model"].update(changed_lines="2"),
                  "unknown key": lambda v: v[some_id]["fake-model"].update(note=1),
-                 "replay keys": lambda v: v[some_id]["fake-model"]["replay"].pop("page")}
+                 "replay keys": lambda v: v[some_id]["fake-model"]["replay"].pop("page"),
+                 "no checks ran": lambda v: v[some_id]["fake-model"].update(protected={"run": 0, "failed": []}),
+                 "unknown check": lambda v: v[some_id]["fake-model"]["protected"].update(failed=["check_x.X.test"]),
+                 "did not apply": lambda v: v[some_id]["fake-model"].update(applies=False, error="refused"),
+                 "replay disagrees": lambda v: v[some_id]["fake-model"]["replay"].update(page=True,
+                                                                                         pool_in_use_end=7),
+                 "negative lines": lambda v: v[some_id]["fake-model"].update(changed_lines=-1),
+                 "another patch": lambda v: v[some_id]["fake-model"].update(patch_sha256="0" * 64)}
         for name, edit in tries.items():
             with self.subTest(name=name), self.assertRaises(ValueError):
                 score_app_report(self.report, changed(edit))
+
+    def test_the_investigation_must_cover_its_suite(self):
+        def changed(edit):
+            report = copy.deepcopy(self.report)
+            edit(report)
+            return report
+
+        tries = {"truncated": lambda r: r["incidents"].pop(),
+                 "repeated": lambda r: r["incidents"].append(r["incidents"][0]),
+                 "unknown id": lambda r: r["incidents"][0].update(id="shop-app:c9:1"),
+                 "missing investigator": lambda r: r["incidents"][0]["results"].pop("fake-model"),
+                 "missing record key": lambda r: r["incidents"][0]["results"]["fake-model"].pop("observed")}
+        for name, edit in tries.items():
+            with self.subTest(name=name), self.assertRaises(ValueError):
+                score_app_report(changed(edit), self.validations)
 
     def test_the_commands_replay_and_score(self):
         folder = Path(self.folder.name)

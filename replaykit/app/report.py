@@ -12,6 +12,13 @@ def _validation(r, key):
     return v is not None and bool(key(v))
 
 
+def _unfinished(v):
+    """Whether a validation that got past the patch rules lost a run: own tests timed out, the checks or the replay
+    gave no result."""
+    return v["applies"] and (v["own_tests"] == "timeout" or v["protected"] == {"run": 0, "failed": ["incomplete"]}
+                             or v["replay"]["page"] is None)
+
+
 def summary(rows):
     """Totals for one investigator's scored results *rows*."""
     n, patch_cases = len(rows), [r for r in rows if r["expected"] == "patch"]
@@ -38,7 +45,7 @@ def summary(rows):
         "replay_clean": _count(proposed, lambda r: _validation(r, lambda v: v["replay"] and v["replay"]["clean"])),
         "patch_valid": _count(patch_cases, lambda r: r["patch_valid"]),
         "patches_where_none_needed": _count(proposed, lambda r: r["expected"] != "patch"),
-        "validation_timeouts": _count(proposed, lambda r: _validation(r, lambda v: v["own_tests"] == "timeout")),
+        "unfinished_validations": _count(proposed, lambda r: _validation(r, _unfinished)),
         "budget_exhausted": _count(rows, lambda r: r["outcome"] == "budget_exhausted"),
         "no_decision": _count(rows, lambda r: r["decision"] is None),
         "model_stopped": _count(rows, lambda r: r["outcome"].startswith("model_")),
@@ -76,7 +83,8 @@ def findings(s):
                  ("invalid_evidence", "{name} cited evidence it had not seen in {k} incidents."),
                  ("budget_exhausted", "{name} ran out of budget in {k} incidents."),
                  ("model_stopped", "{name} got no answer from its model in {k} incidents (lane stopped or error)."),
-                 ("validation_timeouts", "{name} had {k} patch validations time out."))
+                 ("unfinished_validations", "{name} had {k} patch validations that did not finish (a timeout or a "
+                  "crash; the patch counts as not valid)."))
     for key, sentence in sentences:
         lines += [sentence.format(name=n, k=s[n][key]) for n in names if s[n][key]]
     return lines

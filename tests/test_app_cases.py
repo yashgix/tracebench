@@ -169,7 +169,7 @@ class CasePatchTest(unittest.TestCase):
                 _apply(REPO, cases.ANY_CASE, patch, clone)
                 done = subprocess.run([sys.executable, "-I", "-B", str(ROOT / PROTECTED / "run.py"), str(clone),
                                        "check_lookup.py"], capture_output=True, text=True, check=True)
-                self.assertEqual(json.loads(done.stdout), {"run": 4, "failed": [INDEX_CHECK]})
+                self.assertEqual(json.loads(done.stdout), {"run": 5, "failed": [INDEX_CHECK]})
 
     def test_a_range_lookup_that_walks_the_catalogue_is_caught(self):
         # Codex's wrong fixes (chatgpt/91): the plan says SEARCH, yet SQLite steps through every product.
@@ -180,6 +180,34 @@ class CasePatchTest(unittest.TestCase):
                 outcome = self.assertValid("slow_query", wrong, False)
                 self.assertEqual((outcome["own_tests"], outcome["replay"]["clean"]), ("pass", True))
                 self.assertEqual(outcome["protected"]["failed"], [INDEX_CHECK])
+
+    def test_catalogue_work_moved_out_of_sight_is_caught(self):
+        cache = ('if not self.known:\n' + ' ' * 20 + 'self.known = dict(await self._query(connection, '
+                 '"SELECT lower(sku), stock FROM items WHERE sku >= \'\'", ()))\n' + ' ' * 16
+                 + 'rows = [(self.known[sku.lower()],)] if sku.lower() in self.known else []\n')
+        rebuild = ('await self._query(connection, "DROP INDEX IF EXISTS item_lower", ())\n' + ' ' * 16
+                   + 'await self._query(connection, "CREATE INDEX item_lower ON items(lower(sku))", ())\n' + ' ' * 16
+                   + LOOKUP)
+        tries = {"walk once, then a cache": ("        self.running = True\n",
+                                             "        self.running = True\n        self.known = {}\n", LOOKUP, cache),
+                 "an index rebuilt on every lookup": (LOOKUP, rebuild),
+                 "exact first, then a walk": (LOOKUP, LOOKUP.replace("lower(sku) = lower(?)", "sku = ?") + ' ' * 16
+                                              + "if not rows:\n" + ' ' * 20 + LOOKUP.replace(
+                                                  "WHERE lower(sku)", "WHERE sku >= '' AND lower(sku)"))}
+        for name, pairs in tries.items():
+            with self.subTest(name=name):
+                failed = self.assertValid("slow_query", edit(cases.ANY_CASE, "shop/inventory.py", *pairs),
+                                          False)["protected"]["failed"]
+                self.assertIn(INDEX_CHECK, failed)
+
+    def test_a_stale_cache_is_caught(self):
+        memo = ('if sku.lower() not in self.known:\n' + ' ' * 20 + 'self.known[sku.lower()] = await self._query('
+                'connection, "SELECT stock FROM items WHERE sku = lower(?)", (sku,))\n' + ' ' * 16
+                + 'rows = self.known[sku.lower()]\n')
+        wrong = edit(cases.ANY_CASE, "shop/inventory.py", "        self.running = True\n",
+                     "        self.running = True\n        self.known = {}\n", LOOKUP, memo)
+        failed = self.assertValid("slow_query", wrong, False)["protected"]["failed"]
+        self.assertEqual(failed, ["check_lookup.LookupChecks.test_a_lookup_shows_a_reservation"])
 
     def test_a_lookup_that_skips_the_database_is_caught(self):
         stock = '[(int(sku.lower().split("-")[1]) % 50 + 1,)] if sku.lower().startswith("sku-") else []'
