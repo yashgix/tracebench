@@ -182,26 +182,29 @@ class CasePatchTest(unittest.TestCase):
                 self.assertEqual(outcome["protected"]["failed"], [INDEX_CHECK])
 
     def test_catalogue_work_moved_out_of_sight_is_caught(self):
-        cache = ('if not self.known:\n' + ' ' * 20 + 'self.known = dict(await self._query(connection, '
-                 '"SELECT lower(sku), stock FROM items WHERE sku >= \'\'", ()))\n' + ' ' * 16
+        indent, walk = " " * 16, LOOKUP.replace("WHERE lower(sku)", "WHERE sku >= '' AND lower(sku)")
+        exact = LOOKUP.replace("lower(sku) = lower(?)", "sku = ?")
+        cache = ('if not self.known:\n' + indent + '    self.known = dict(await self._query(connection, '
+                 '"SELECT lower(sku), stock FROM items WHERE sku >= \'\'", ()))\n' + indent
                  + 'rows = [(self.known[sku.lower()],)] if sku.lower() in self.known else []\n')
-        rebuild = ('await self._query(connection, "DROP INDEX IF EXISTS item_lower", ())\n' + ' ' * 16
-                   + 'await self._query(connection, "CREATE INDEX item_lower ON items(lower(sku))", ())\n' + ' ' * 16
-                   + LOOKUP)
-        tries = {"walk once, then a cache": ("        self.running = True\n",
-                                             "        self.running = True\n        self.known = {}\n", LOOKUP, cache),
-                 "an index rebuilt on every lookup": (LOOKUP, rebuild),
-                 "a walk only for a miss": (LOOKUP, LOOKUP.replace("lower(sku) = lower(?)", "sku = lower(?)") + ' ' * 16
-                                            + "if not rows:\n" + ' ' * 20 + LOOKUP.replace(
-                                                "WHERE lower(sku)", "WHERE sku >= '' AND lower(sku)")),
-                 "exact first, then a walk": (LOOKUP, LOOKUP.replace("lower(sku) = lower(?)", "sku = ?") + ' ' * 16
-                                              + "if not rows:\n" + ' ' * 20 + LOOKUP.replace(
-                                                  "WHERE lower(sku)", "WHERE sku >= '' AND lower(sku)"))}
-        for name, pairs in tries.items():
+        rebuild = ('await self._query(connection, "DROP INDEX IF EXISTS item_lower", ())\n' + indent
+                   + 'await self._query(connection, "CREATE INDEX IF NOT EXISTS item_lower ON items(lower(sku))", ())'
+                   + '\n' + indent + LOOKUP)
+        upper = ("if sku == sku.lower():\n" + indent + "    " + exact + indent + "else:\n" + indent + "    " + walk)
+        miss = LOOKUP.replace("lower(sku) = lower(?)", "sku = lower(?)") + indent + "if not rows:\n" + indent + "    "
+        reservation = "check_lookup.LookupChecks.test_a_lookup_shows_a_reservation"
+        tries = {"walk once, then a cache": (("        self.running = True\n",
+                                              "        self.running = True\n        self.known = {}\n", LOOKUP, cache),
+                                             [INDEX_CHECK, reservation]),
+                 "an index rebuilt on every lookup": ((LOOKUP, rebuild), [INDEX_CHECK]),
+                 "a walk only for a miss": ((LOOKUP, miss + walk), [INDEX_CHECK]),
+                 "a walk only for upper case": ((LOOKUP, upper), [INDEX_CHECK]),
+                 "exact first, then a walk": ((LOOKUP, exact + indent + "if not rows:\n" + indent + "    " + walk),
+                                              [INDEX_CHECK])}
+        for name, (pairs, expected) in tries.items():
             with self.subTest(name=name):
-                failed = self.assertValid("slow_query", edit(cases.ANY_CASE, "shop/inventory.py", *pairs),
-                                          False)["protected"]["failed"]
-                self.assertIn(INDEX_CHECK, failed)
+                outcome = self.assertValid("slow_query", edit(cases.ANY_CASE, "shop/inventory.py", *pairs), False)
+                self.assertEqual(outcome["protected"]["failed"], expected)
 
     def test_a_stale_cache_is_caught(self):
         memo = ('if sku.lower() not in self.known:\n' + ' ' * 20 + 'self.known[sku.lower()] = await self._query('
