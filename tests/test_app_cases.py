@@ -23,7 +23,12 @@ FAKE = ('return await db.query(type("Clock", (), {"sleep": lambda _, ms: self.ru
         'connection, sql, params)')
 LOOKUP = 'rows = await self._query(connection, "SELECT stock FROM items WHERE lower(sku) = lower(?)", (sku,))\n'
 FAKE_CLOCK = edit(cases.ANY_CASE, "shop/inventory.py", QUERY, FAKE)
-# The reference fix and a fake clock, plus a full scan of items beside the indexed lookup.
+# The reference fix with an extra full scan beside the indexed lookup: under a fake clock, or under an alias whose
+# query fails in db.query's cost model and is swallowed.
+ALIASED_SCAN = ('try:\n' + ' ' * 20 + 'await self._query(connection, "SELECT stock FROM items AS i WHERE lower(i.sku) = '
+                'lower(?)", (sku,))\n' + ' ' * 16 + 'except ServiceError:\n' + ' ' * 20 + 'pass\n')
+SCAN_ALIASED = edit(cases.ANY_CASE, "shop/inventory.py", LOOKUP,
+                    LOOKUP.replace("lower(sku)", "sku") + ' ' * 16 + ALIASED_SCAN)
 SCAN_BESIDE = edit(cases.ANY_CASE, "shop/inventory.py", QUERY, FAKE, LOOKUP, LOOKUP.replace("lower(sku)", "sku")
                    + ' ' * 16 + 'await self._query(connection, "SELECT count(*) FROM items", ())\n')
 
@@ -157,7 +162,8 @@ class CasePatchTest(unittest.TestCase):
 
     def test_the_index_check_alone_catches_a_fake_query_clock(self):
         # Without the clock rule: the patch applied by hand, only check_lookup run against it.
-        for name, patch in (("fake clock", FAKE_CLOCK), ("scan beside the index", SCAN_BESIDE)):
+        for name, patch in (("fake clock", FAKE_CLOCK), ("scan beside the index", SCAN_BESIDE),
+                            ("aliased scan", SCAN_ALIASED)):
             with self.subTest(name=name), tempfile.TemporaryDirectory() as folder:
                 clone = Path(folder) / "repo"
                 _apply(REPO, cases.ANY_CASE, patch, clone)

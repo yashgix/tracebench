@@ -36,7 +36,8 @@ class LookupChecks(unittest.TestCase):
             trusted = own()
         plans = [row[3] for sql in ran if not sql.startswith("EXPLAIN")
                  for row in trusted.execute("EXPLAIN QUERY PLAN " + sql)]
-        self.assertEqual({plan.split()[0] for plan in plans if plan.split()[1:2] == ["items"]}, {"SEARCH"}, plans)
+        # Any table name counts: an alias (`items AS i`) shows up as `SCAN i`.
+        self.assertEqual({plan.split()[0] for plan in plans} & {"SEARCH", "SCAN"}, {"SEARCH"}, plans)
 
     def test_an_unknown_product_is_not_found(self):
         self.assertEqual(statuses(self.app, [(0, lambda: self.app.web.product("nope"))]), [404])

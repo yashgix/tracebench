@@ -22,7 +22,8 @@ class LimitChecks(unittest.TestCase):
         self.assertGreaterEqual(done.count(200), 5)
 
     def test_the_limit_holds_for_one_second_then_starts_again(self):
-        times = [100] * 6 + [900] + [1_100] * 6
+        # From a burst at 0, a fixed or a rolling window passes only if it is within 50 ms of one second.
+        times = [0] * 6 + [950] + [1_050] * 6
         self.assertEqual(self.at(times), [200] * 5 + [503, 503] + [200] * 5 + [503])
 
     def at(self, times):
