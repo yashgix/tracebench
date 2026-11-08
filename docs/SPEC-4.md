@@ -88,3 +88,25 @@ model reads `SCAN CONSTANT ROW` (a scalar subquery such as `sku = (SELECT lower(
 and fails the request, so that correct spelling is rejected; the shop's pinned history is not changed for it. As in SPEC-3, an
 escalation or dismissal needs no evidence, so an "always escalate" stub resolves c5 and an "always dismiss" stub c6
 (and fails the other five); reports show each case.
+
+## B6. The app suite, its commands and the report
+- `suites/shop-app-v1.json`: the six cases × seeds 1, 2 (12 incidents), limits 15 turns, 25 tool calls, 200,000
+  tokens, 600,000 ms, three models and the two rule baselines. `shop_commit` pins the shop repository: it must hold
+  that commit, and every case commit must be in its history.
+- `replaykit investigate-app SUITE --repo SHOP (--broker URL | --replay REPORT) --out PATH`: runs every investigator
+  on every incident and writes the investigation (decisions, what each saw, transcripts, the deployed commits); no
+  patch is run here. `--replay` answers from a saved investigation's transcripts (each packet hash must match), so
+  the verifier rebuilds the same bytes.
+- Patch validation is the trusted side's: `validate_app(report, repo, runner)` runs `validate_patch` for every
+  `patch` decision of the verifier's investigation, giving {incident id: {investigator: result}}. Tests and
+  rehearsals pass `LocalRunner`; model patches only the `_arcexec` runner.
+- `replaykit score-app INVESTIGATION --validations PATH --out PATH [--md PATH]`: refuses validations that do not
+  cover exactly the patch decisions or whose shape or verdict does not add up, then scores against the truth.
+- The report counts apart, per investigator: decisions (resolved, right decision, escalations and dismissals, false
+  ones), diagnosis on the incidents that need a fix (root cause, file and function, evidence valid), remediation
+  (patches, applies, own tests, protected checks, replay clean, valid fix, patches where none was needed, validation
+  timeouts) and effort; then every incident.
+- Rule baselines, labelled in the report: `revert_last_deploy` reverts the newest deploy before the page (any
+  service; every page here is on web) and escalates when there was none; `deepest_abnormal_commit` blames the deployed
+  commit of the abnormal service lowest in the call graph and dismisses when none looks abnormal. Both read the whole
+  bundle without tools, use thresholds picked for this simulator, and name no function.

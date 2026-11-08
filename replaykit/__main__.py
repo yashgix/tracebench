@@ -4,6 +4,9 @@ import json
 import os
 import sys
 
+from .app.baselines import NAMES as APP_BASELINES
+from .app.report import render_app_markdown
+from .app.suite import investigate_app, load_app_suite, patches, score_app_report
 from .baselines import AGENT_NAMES, make_agent
 from .broker import BrokerModel
 from .inject import inject
@@ -100,8 +103,7 @@ def _suite_command(args):
     return 0
 
 
-def _models(args):
-    names = [n for n in load_investigation_suite(args.path)["suite"]["investigators"] if n not in AGENT_NAMES]
+def _models(names, args):
     if args.replay and args.broker:
         raise ValueError("--replay and --broker cannot be used together")
     if names and args.replay:
@@ -119,10 +121,38 @@ def _models(args):
 
 
 def _investigate_command(args):
-    report = run_investigations(args.path, _models(args))
+    names = [n for n in load_investigation_suite(args.path)["suite"]["investigators"] if n not in AGENT_NAMES]
+    report = run_investigations(args.path, _models(names, args))
     markdown = render_investigation_markdown(report)
     if args.out:
         _write_report(report, args.out)
+    if args.md:
+        _write_markdown(markdown, args.md)
+    sys.stdout.write(markdown)
+    return 0
+
+
+def _read_json(path):
+    try:
+        with open(path, encoding="utf-8") as handle:
+            return json.load(handle)
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+        raise ValueError(f"invalid JSON in {path}: {exc}") from None
+
+
+def _investigate_app_command(args):
+    loaded = load_app_suite(args.path, args.repo)
+    names = [n for n in loaded["suite"]["investigators"] if n not in APP_BASELINES]
+    report = investigate_app(loaded, args.repo, _models(names, args))
+    _write_report(report, args.out)
+    print(f"{len(report['incidents'])} incidents, {len(patches(report))} patches to validate")
+    return 0
+
+
+def _score_app_command(args):
+    report = score_app_report(_read_json(args.path), _read_json(args.validations))
+    markdown = render_app_markdown(report)
+    _write_report(report, args.out)
     if args.md:
         _write_markdown(markdown, args.md)
     sys.stdout.write(markdown)
@@ -150,6 +180,17 @@ def _parser():
     investigate.add_argument("--broker", metavar="URL")
     investigate.add_argument("--out", metavar="PATH")
     investigate.add_argument("--md", metavar="PATH")
+    app = commands.add_parser("investigate-app", help="investigate an app suite (no patch validation)")
+    app.add_argument("path", metavar="PATH")
+    app.add_argument("--repo", required=True, metavar="SHOP_REPO")
+    app.add_argument("--replay", metavar="REPORT")
+    app.add_argument("--broker", metavar="URL")
+    app.add_argument("--out", required=True, metavar="PATH")
+    score = commands.add_parser("score-app", help="score an app investigation with its patch validations")
+    score.add_argument("path", metavar="INVESTIGATION")
+    score.add_argument("--validations", required=True, metavar="PATH")
+    score.add_argument("--out", required=True, metavar="PATH")
+    score.add_argument("--md", metavar="PATH")
     return parser
 
 
@@ -160,6 +201,10 @@ def main(argv=None):
             return _run_command(args)
         if args.command == "investigate":
             return _investigate_command(args)
+        if args.command == "investigate-app":
+            return _investigate_app_command(args)
+        if args.command == "score-app":
+            return _score_app_command(args)
         return _suite_command(args)
     except (OSError, ValueError, KeyError) as exc:
         print(f"error: {exc}", file=sys.stderr)
