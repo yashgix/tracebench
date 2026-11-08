@@ -1,5 +1,6 @@
 """Protected checks (never shown to the investigator): product codes match in any case, quickly, in a big catalogue."""
 
+import contextlib
 import itertools
 import re
 import sqlite3
@@ -24,14 +25,11 @@ class LookupChecks(unittest.TestCase):
         self.assertEqual(statuses(self.app, [(0, lambda: self.app.web.product("Sku-4321"))]), [200])
 
     def test_a_lookup_shows_the_stock_in_the_database(self):
-        # One product per trial, one trial after another. Maybe read in one spelling (done before anything else
-        # starts); reserve once or twice (the second up to 8 ms into the first); read in another spelling at every
-        # offset into the first reservation (any stock the database held). Then read in all three spellings right
-        # after the reservations return (or not, as that read can refill a cache) and 60 ms after the trial's last
-        # call: those must show the stock in the database, read on the check's own connection.
+        # Trials one after another, one product each: reads after one or two overlapping reservations must match
+        # the database, read on the check's own connection. The full sequence is in SPEC-4.
         name = db_name()
         app = shop(CATALOGUE, name)
-        runtime, inventory, seen, allowed, fresh, products = app.runtime, app.inventory, {}, {}, {}, {}
+        runtime, inventory, seen, allowed, products = app.runtime, app.inventory, {}, {}, {}
 
         async def ask(key, values, method, *args):
             allowed[key] = values
@@ -51,7 +49,6 @@ class LookupChecks(unittest.TestCase):
 
         async def read_all(n, when, sku):
             for spell in SPELLINGS:
-                fresh[n, when, spell.__name__] = sku
                 await ask((n, when, spell.__name__), None, inventory.stock, spell(sku))
 
         async def trial(n, sku, stock, offset, first, during, second, at_once):
@@ -82,9 +79,9 @@ class LookupChecks(unittest.TestCase):
 
         # Simulated time costs nothing; an hour leaves room for lookups near the 50 ms limit.
         self.assertEqual(statuses(app, [(0, trials)], until=3_600_000), [3120])
-        held = dict(sqlite3.connect(f"file:{name}?mode=memory&cache=shared", uri=True).execute(
-            "SELECT sku, stock FROM items"))
-        allowed.update((key, {held[sku]}) for key, sku in fresh.items())
+        with contextlib.closing(sqlite3.connect(f"file:{name}?mode=memory&cache=shared", uri=True)) as own:
+            held = dict(own.execute("SELECT sku, stock FROM items"))
+        allowed |= {key: {held[products[key[0]][0]]} for key, values in allowed.items() if values is None}
         for n, (sku, left) in products.items():
             seen[n, "database"], allowed[n, "database"] = held[sku], {left}
         self.assertEqual({key: value for key, value in seen.items() if value not in allowed[key]}, {})
