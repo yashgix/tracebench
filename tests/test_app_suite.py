@@ -111,7 +111,9 @@ class AppPipelineTest(unittest.TestCase):
                  "replay disagrees": lambda v: v[some_id]["fake-model"]["replay"].update(page=True,
                                                                                          pool_in_use_end=7),
                  "negative lines": lambda v: v[some_id]["fake-model"].update(changed_lines=-1),
-                 "another patch": lambda v: v[some_id]["fake-model"].update(patch_sha256="0" * 64)}
+                 "another patch": lambda v: v[some_id]["fake-model"].update(patch_sha256="0" * 64),
+                 "other files": lambda v: v[some_id]["fake-model"].update(files=["shop/web.py"]),
+                 "negative errors": lambda v: v[some_id]["fake-model"]["replay"].update(web_errors=-1)}
         for name, edit in tries.items():
             with self.subTest(name=name), self.assertRaises(ValueError):
                 score_app_report(self.report, changed(edit))
@@ -126,7 +128,8 @@ class AppPipelineTest(unittest.TestCase):
                  "repeated": lambda r: r["incidents"].append(r["incidents"][0]),
                  "unknown id": lambda r: r["incidents"][0].update(id="shop-app:c9:1"),
                  "missing investigator": lambda r: r["incidents"][0]["results"].pop("fake-model"),
-                 "missing record key": lambda r: r["incidents"][0]["results"]["fake-model"].pop("observed")}
+                 "missing record key": lambda r: r["incidents"][0]["results"]["fake-model"].pop("observed"),
+                 "decision not an object": lambda r: r["incidents"][0]["results"]["fake-model"].update(decision="x")}
         for name, edit in tries.items():
             with self.subTest(name=name), self.assertRaises(ValueError):
                 score_app_report(changed(edit), self.validations)

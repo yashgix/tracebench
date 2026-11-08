@@ -191,6 +191,9 @@ class CasePatchTest(unittest.TestCase):
         tries = {"walk once, then a cache": ("        self.running = True\n",
                                              "        self.running = True\n        self.known = {}\n", LOOKUP, cache),
                  "an index rebuilt on every lookup": (LOOKUP, rebuild),
+                 "a walk only for a miss": (LOOKUP, LOOKUP.replace("lower(sku) = lower(?)", "sku = lower(?)") + ' ' * 16
+                                            + "if not rows:\n" + ' ' * 20 + LOOKUP.replace(
+                                                "WHERE lower(sku)", "WHERE sku >= '' AND lower(sku)")),
                  "exact first, then a walk": (LOOKUP, LOOKUP.replace("lower(sku) = lower(?)", "sku = ?") + ' ' * 16
                                               + "if not rows:\n" + ' ' * 20 + LOOKUP.replace(
                                                   "WHERE lower(sku)", "WHERE sku >= '' AND lower(sku)"))}

@@ -17,8 +17,8 @@ from .bundle import bundle
 from .cases import CASES, case
 from .evaluate import score_app
 from .incident import run_case
-from .patch import GIT_ENV, REPLAY_KEYS, RESULT_KEYS, ROOT, _run, check_ids, protected_result, replay_result, \
-    validate_patch, verdict
+from .patch import GIT_ENV, REPLAY_KEYS, RESULT_KEYS, ROOT, _run, check_ids, check_patch, protected_result, \
+    replay_result, validate_patch, verdict
 from .report import findings, summaries
 from .tools import CodeEvidence
 
@@ -158,12 +158,29 @@ def _check_report(report):
     for entry in report["incidents"]:
         results = entry.get("results")
         if not isinstance(results, dict) or set(results) != set(meta["investigators"]) or not all(
-                isinstance(r, dict) and set(r) == set(RECORD_KEYS) for r in results.values()):
+                map(_complete, results.values())):
             raise ValueError(f"incident {entry['id']} must hold one complete record per investigator")
+
+
+def _complete(record):
+    return (isinstance(record, dict) and set(record) == set(RECORD_KEYS)
+            and (record["decision"] is None or isinstance(record["decision"], dict))
+            and isinstance(record["outcome"], str) and isinstance(record["observed"], list)
+            and all(isinstance(i, str) for i in record["observed"]) and isinstance(record["transcript"], list)
+            and _ints(*(record[k] for k in RECORD_KEYS if k not in ("decision", "outcome", "observed", "transcript"))))
 
 
 def _ints(*values):
     return all(_is_int(v) and v >= 0 for v in values)
+
+
+def _replay_shaped(r):
+    if not (isinstance(r, dict) and set(r) == set(REPLAY_KEYS) and replay_result(r) == r):
+        return False
+    if r["page"] is None:  # the form of a replay that gave no result
+        return True
+    end = r["pool_in_use_end"]
+    return _ints(r["web_errors"]) and (end is None or _ints(end)) and r["clean"] == (not r["page"] and end == 0)
 
 
 def _shaped(v, ids):
@@ -177,18 +194,25 @@ def _shaped(v, ids):
     p, r = v["protected"], v["replay"]
     protected = p is None or (isinstance(p, dict) and set(p) == {"run", "failed"} and _ints(p["run"])
                               and isinstance(p["failed"], list) and protected_result(p, ids) == p)
-    replay = r is None or (isinstance(r, dict) and set(r) == set(REPLAY_KEYS) and replay_result(r) == r and (
-        r["page"] is None or r["clean"] == (not r["page"] and r["pool_in_use_end"] == 0)))
+    replay = r is None or _replay_shaped(r)
     runs = (v["own_tests"], p, r)
     ran = None not in runs if v["applies"] else runs == (None, None, None)
     return protected and replay and ran
+
+
+def _measured(decision):
+    """[files, changed lines] as `validate_patch` records them for *decision*'s patch."""
+    try:
+        return list(check_patch(decision["patch"]))
+    except ValueError:
+        return [[], 0]
 
 
 def _check_validation(v, decision, case_name):
     """Raise unless *v* is a complete validation of *decision*'s patch whose verdict agrees with its runs."""
     if not _shaped(v, check_ids(ROOT, CASES[case_name]["protected"])):
         raise ValueError("a validation does not have the shape of a patch validation")
-    if v["patch_sha256"] != _patch_sha256(decision):
+    if v["patch_sha256"] != _patch_sha256(decision) or [v["files"], v["changed_lines"]] != _measured(decision):
         raise ValueError("a validation is not of its decision's patch")
     if v["valid"] != (verdict(v) and v["applies"] and v["error"] is None):
         raise ValueError("a validation's verdict does not match its runs")

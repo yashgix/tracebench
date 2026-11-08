@@ -54,8 +54,8 @@ class LookupChecks(unittest.TestCase):
                         return error.status
                 return run
 
-            skus = ("sku-5999", "sku-4242", "Sku-4321")
-            self.assertEqual(len(statuses(app, [(i * 10_000, lookup(sku)) for i, sku in enumerate(skus)])), 3)
+            skus = ("sku-5999", "sku-4242", "Sku-4321", "sku-9999")  # the last one is not in the catalogue
+            self.assertEqual(len(statuses(app, [(i * 10_000, lookup(sku)) for i, sku in enumerate(skus)])), 4)
             trusted = own()
         plans = [row[3] for sql in ran if not sql.startswith("EXPLAIN")
                  for row in trusted.execute("EXPLAIN QUERY PLAN " + sql)]
