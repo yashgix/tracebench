@@ -68,6 +68,10 @@ class CasesTest(unittest.TestCase):
                 for secret in ("protected", *spec["protected"], *own_fix):
                     self.assertFalse(secret in text, secret)
 
+    def test_run_descriptions_carry_no_truth(self):
+        for name in cases.CASES:
+            self.assertFalse({"truth", "protected"} & set(cases.case(name, 1)), name)
+
     def test_decoy_errors_start_before_the_web_deploy(self):
         events = incident("decoy").events
         web_deploy = [e["t"] for e in events if e["kind"] == "deploy" and e["attrs"]["version"] == cases.LOG_WORDING]
@@ -136,6 +140,21 @@ class InstrumentTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "shop/db.py"):
             check_patch(edit(cases.ANY_CASE, "shop/db.py", "for table in SCAN.findall(plan)", "for table in []"))
 
+    def test_settings_changes_the_text_rule_cannot_see_are_refused(self):
+        for added in ("        del config.POOL_REPORT_MS\n", "        config.QUERY_MS, _unused = 0, 1\n"):
+            patch = edit(cases.ANY_CASE, "shop/inventory.py", "    async def report_pool(self):\n",
+                         "    async def report_pool(self):\n" + added)
+            check_patch(patch)  # passes as text
+            outcome = validate("slow_query", patch)
+            with self.subTest(added=added):
+                self.assertEqual((outcome["applies"], outcome["valid"]), (False, False))
+                self.assertIn("setting", outcome["error"])
+
+    def test_non_ascii_added_lines_are_refused(self):
+        patch = edit(cases.ORDER_CAP, "shop/orders.py", "items per order", "items per order \u2014 sorry")
+        with self.assertRaisesRegex(ValueError, "ASCII"):
+            check_patch(patch)
+
     def test_reaching_the_interpreter_through_modules_is_refused(self):
         forge = """    async def report_pool(self):
         _s = db.re.enum.\uff53\uff59\uff53
@@ -143,6 +162,7 @@ class InstrumentTest(unittest.TestCase):
 """
         tries = {"fullwidth name": forge,
                  "module chain": forge.replace("\uff53\uff59\uff53", "bltns"),
+                 "stdlib module": "    async def report_pool(self):\n        _unused = db.re\n",
                  "split SQL": '        connection.execute("ATT" + "ACH DATABASE ? AS x", ("/tmp/x",))\n'}
         for name, added in tries.items():
             patch = edit(cases.ANY_CASE, "shop/inventory.py", "    async def report_pool(self):\n",
@@ -220,6 +240,15 @@ class CaseRehearsalTest(unittest.TestCase):
                              retry)):
             with self.subTest(act=act([])["act"]):
                 self.assertFalse(investigate("outside_lock", act)["resolved"])
+
+    def test_the_wrong_function_or_commit_is_not_the_root_cause(self):
+        right = dict(zip(("act", "service", "fault_type", "commit", "file", "function"),
+                         ("diagnose", "orders", "code_defect", cases.ORDER_CAP, "shop/orders.py", "Orders.place")))
+        for change in ({"function": "Orders.__init__"}, {"commit": cases.LOG_WORDING}):
+            outcome = investigate("decoy", decision(**(right | change)))
+            with self.subTest(change=change):
+                self.assertFalse(outcome["location_correct"])
+        self.assertTrue(investigate("decoy", decision(**right))["location_correct"])
 
     def test_a_valid_patch_to_another_file_is_not_a_fix_of_the_named_one(self):
         named = decision("patch", "inventory", "slow_query", cases.ANY_CASE, "shop/config.py", "-", FIXES["slow_query"])
