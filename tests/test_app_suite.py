@@ -108,6 +108,8 @@ class AppPipelineTest(unittest.TestCase):
                  "no checks ran": lambda v: v[some_id]["fake-model"].update(protected={"run": 0, "failed": []}),
                  "unknown check": lambda v: v[some_id]["fake-model"]["protected"].update(failed=["check_x.X.test"]),
                  "did not apply": lambda v: v[some_id]["fake-model"].update(applies=False, error="refused"),
+                 "runs without applying": lambda v: v[some_id]["fake-model"].update(applies=False, error="refused",
+                                                                                     valid=False),
                  "replay disagrees": lambda v: v[some_id]["fake-model"]["replay"].update(page=True,
                                                                                          pool_in_use_end=7),
                  "negative lines": lambda v: v[some_id]["fake-model"].update(changed_lines=-1),
