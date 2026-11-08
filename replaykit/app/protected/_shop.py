@@ -40,18 +40,24 @@ def statuses(app, requests, until=60_000):
 
 @contextlib.contextmanager
 def statements():
-    """Every statement SQLite runs on a connection opened inside the block, as SQLite expanded it, and a fresh
-    connection of the check's own to the first database opened (for explaining them)."""
-    ran, first, connect = [], [], sqlite3.connect
+    """Every statement SQLite runs on a connection opened inside the block, as SQLite expanded it; the virtual
+    machine steps SQLite took on those connections (a count in a list); and a fresh connection of the check's own to
+    the first database opened (for explaining the statements)."""
+    ran, steps, first, connect = [], [0], [], sqlite3.connect
+
+    def step():
+        steps[0] += 1
+        return 0
 
     def traced(*args, **kwargs):
         first.append((args, kwargs))
         connection = connect(*args, **kwargs)
         connection.set_trace_callback(ran.append)
+        connection.set_progress_handler(step, 1)
         return connection
 
     sqlite3.connect = traced
     try:
-        yield ran, lambda: connect(*first[0][0], **first[0][1])
+        yield ran, steps, lambda: connect(*first[0][0], **first[0][1])
     finally:
         sqlite3.connect = connect

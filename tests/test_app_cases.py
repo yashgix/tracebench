@@ -171,6 +171,34 @@ class CasePatchTest(unittest.TestCase):
                                        "check_lookup.py"], capture_output=True, text=True, check=True)
                 self.assertEqual(json.loads(done.stdout), {"run": 4, "failed": [INDEX_CHECK]})
 
+    def test_a_range_lookup_that_walks_the_catalogue_is_caught(self):
+        # Codex's wrong fixes (chatgpt/91): the plan says SEARCH, yet SQLite steps through every product.
+        for bound in ("''", "'sku-'"):
+            wrong = edit(cases.ANY_CASE, "shop/inventory.py", LOOKUP,
+                         LOOKUP.replace("WHERE lower(sku)", f"WHERE sku >= {bound} AND lower(sku)"))
+            with self.subTest(bound=bound):
+                outcome = self.assertValid("slow_query", wrong, False)
+                self.assertEqual((outcome["own_tests"], outcome["replay"]["clean"]), ("pass", True))
+                self.assertEqual(outcome["protected"]["failed"], [INDEX_CHECK])
+
+    def test_a_lookup_that_skips_the_database_is_caught(self):
+        stock = '[(int(sku.lower().split("-")[1]) % 50 + 1,)] if sku.lower().startswith("sku-") else []'
+        wrong = edit(cases.ANY_CASE, "shop/inventory.py", LOOKUP, f"rows = {stock}\n")
+        failed = self.assertValid("slow_query", wrong, False)["protected"]["failed"]
+        self.assertIn(INDEX_CHECK, failed)
+        self.assertIn("check_inventory.InventoryChecks.test_stock_lookup_returns_the_connection", failed)
+
+    def test_correct_lookups_written_another_way_are_valid(self):
+        exact = LOOKUP.replace("lower(sku)", "sku")
+        fixes = {"keyword clock": (LOOKUP, exact, QUERY,
+                                   "return await db.query(runtime=self.runtime, connection=connection, sql=sql, "
+                                   "params=params)"),
+                 "expression index": (LOOKUP, 'await self._query(connection, "CREATE INDEX IF NOT EXISTS '
+                                      'item_lower ON items(lower(sku))", ())\n' + ' ' * 16 + LOOKUP)}
+        for name, pairs in fixes.items():
+            with self.subTest(name=name):
+                self.assertValid("slow_query", edit(cases.ANY_CASE, "shop/inventory.py", *pairs), True)
+
     def test_dropping_the_any_case_lookup_is_caught(self):
         wrong = edit(cases.ANY_CASE, "shop/inventory.py", "WHERE lower(sku) = lower(?)", "WHERE sku = ?")
         failed = self.assertValid("slow_query", wrong, False)["protected"]["failed"]
@@ -202,7 +230,8 @@ class InstrumentTest(unittest.TestCase):
         query, method = "db.query(self.runtime, connection, sql, params)", "    async def report_pool(self):\n"
         tries = {"alias": (method, method + "        _unused = db.query\n"),
                  "other clock": (query, "db.query(self.telemetry, connection, sql, params)"),
-                 "keyword": (query, "db.query(connection=connection, sql=sql, params=params, runtime=self.runtime)"),
+                 "keyword": (query, "db.query(connection=connection, sql=sql, params=params, runtime=self.telemetry)"),
+                 "unpacked": (query, 'db.query(connection=connection, sql=sql, params=params, **{"runtime": self.runtime})'),
                  "rebound runtime": (method, method + "        self.runtime = self.telemetry\n"),
                  "pool clock": ("Pool(runtime, connect", "Pool(self.telemetry, connect")}
         for name, (old, new) in tries.items():
@@ -224,6 +253,7 @@ class InstrumentTest(unittest.TestCase):
         tries = {"fullwidth name": forge,
                  "module chain": forge.replace("\uff53\uff59\uff53", "bltns"),
                  "stdlib module": "    async def report_pool(self):\n        _unused = db.re\n",
+                 "step count off": "    async def report_pool(self):\n        self.pool.set_progress_handler(None, 0)\n",
                  "split SQL": '        connection.execute("ATT" + "ACH DATABASE ? AS x", ("/tmp/x",))\n'}
         for name, added in tries.items():
             patch = edit(cases.ANY_CASE, "shop/inventory.py", "    async def report_pool(self):\n",

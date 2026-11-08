@@ -51,8 +51,8 @@ Incident ids are opaque (`shop-app:c<N>:<seed>`), so neither ids nor run descrip
   refuses any new import, dunder, store or delete of an instrument setting, and any new name or attribute in `REACH`
   (denied names, every standard-library module name, the interpreter's handles, `.execute` and the other SQL entry
   points) or among the harness internals, and any new way of handing `db.query` or `Pool` a clock other than the
-  app's own (`self.runtime`; for `Pool` also its `runtime` argument), including any other reference to them and any
-  store to `runtime` (a break here makes the patch invalid).
+  app's own (`self.runtime`; for `Pool` also its `runtime` argument; first in place or as `runtime=`), including any
+  other reference to them and any store to `runtime` (a break here makes the patch invalid).
 - Then three runs: the app's own tests, the case's protected checks (`run.py <tree> <check files>`), and the same
   traffic with the patched commit deployed. Valid = own tests pass, every protected check runs and passes, and the
   replay is clean (no page, pool back to 0). A patch counts as the decision's fix only if it changes the decision's
@@ -62,7 +62,9 @@ Incident ids are opaque (`shop-app:c<N>:<seed>`), so neither ids nor run descrip
   a product's many buyers are not), `check_orders` (an order over
   the cap is a 4xx and takes no stock), `check_lookup` (any case matches, under 50 ms in 6,000 rows, and the
   statements SQLite actually ran, traced on every connection and explained on the check's own, search by an index
-  and never scan a table, under any alias). Reference fixes:
+  and never scan a table, under any alias; a second lookup, of another product, takes at most 200 SQLite steps,
+  counted by a progress handler on those connections: correct fixes take 14-22, a range over the whole catalogue
+  36,013). Reference fixes:
   `protected/<case>.patch`.
 - **Boundary:** the patched code runs only inside those three runs. For any model-written patch they run as the
   `_arcexec` account through the coordinator's existing `sandbox.run` (Seatbelt, no network, the home folder hidden,
@@ -81,6 +83,8 @@ Incident ids are opaque (`shop-app:c<N>:<seed>`), so neither ids nor run descrip
 
 ## B5. Limits
 Simulated clock and SQLite in memory (an application-level demo, not a Postgres equivalent); one app, six cases;
-query cost is a model of the plan, not measured time; per-minute metrics; the page rule is fixed. As in SPEC-3, an
+query cost is a model of the plan, not measured time; per-minute metrics; the page rule is fixed. The shop's cost
+model reads `SCAN CONSTANT ROW` (a scalar subquery such as `sku = (SELECT lower(?))`) as a table named `CONSTANT`
+and fails the request, so that correct spelling is rejected; the shop's pinned history is not changed for it. As in SPEC-3, an
 escalation or dismissal needs no evidence, so an "always escalate" stub resolves c5 and an "always dismiss" stub c6
 (and fails the other five); reports show each case.

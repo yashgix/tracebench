@@ -25,7 +25,7 @@ DENIED = ("exec", "eval", "open", "compile", "globals", "locals", "vars", "getat
 # through modules the app imports), the interpreter's handles, and the database calls that run SQL.
 REACH = frozenset({*DENIED, *sys.stdlib_module_names, "bltns", "modules", "argv", "stdin", "stdout", "stderr",
                    "execute", "executemany", "executescript", "enable_load_extension", "create_function",
-                   "set_authorizer", "set_trace_callback"})
+                   "set_authorizer", "set_trace_callback", "set_progress_handler"})
 INTERNALS = ("spans", "logs", "gauges", "in_use", "opened", "now", "_idle", "_waiters", "_queue", "_connect")
 SQL = ("ATTACH", "DETACH", "VACUUM", "PRAGMA", "LOAD_EXTENSION")
 FORBIDDEN = re.compile(rf"\bimport\b|__|\b(?:{'|'.join(DENIED)})\b|(?i:\b(?:{'|'.join(SQL)})\b)")
@@ -149,9 +149,15 @@ def _timer(node):
 
 
 def _clocked(call):
-    """Whether *call* hands its timer the app's own clock (`self.runtime`; for `Pool`, also the `runtime` argument)."""
-    first = ast.unparse(call.args[0]) if call.args else None
-    return first == "self.runtime" or (first == "runtime" and isinstance(call.func, ast.Name))
+    """Whether *call* hands its timer the app's own clock (`self.runtime`; for `Pool`, also the `runtime` argument),
+    first in place or as `runtime=`."""
+    if call.args:
+        given = ast.unparse(call.args[0])
+    elif all(k.arg is not None for k in call.keywords):
+        given = next((ast.unparse(k.value) for k in call.keywords if k.arg == "runtime"), None)
+    else:
+        return False
+    return given == "self.runtime" or (given == "runtime" and isinstance(call.func, ast.Name))
 
 
 def _stored(node, names):
