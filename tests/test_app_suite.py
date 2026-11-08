@@ -69,6 +69,13 @@ class AppPipelineTest(unittest.TestCase):
         self.assertEqual((totals["resolved"], totals["patch_valid"], totals["patch_cases"]), (5, 3, 3))
         self.assertEqual((totals["escalated"], totals["dismissed"]), (1, 1))
 
+    def test_a_stopped_model_is_counted_and_named(self):
+        stopped = investigate_app(self.loaded, REPO, {"fake-model": lambda *_: Reply("stopped", None, 0, 0, 0, 0)})
+        scored = score_app_report(stopped, {})
+        self.assertEqual(scored["investigators"]["fake-model"]["model_stopped"], 5)
+        self.assertIn("fake-model got no answer from its model in 5 incidents (lane stopped or error).",
+                      scored["findings"])
+
     def test_the_investigation_holds_no_patch_result(self):
         self.assertFalse("validation" in json.dumps(self.report))
         self.assertEqual(len(patches(self.report)), 3)

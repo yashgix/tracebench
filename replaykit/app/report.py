@@ -41,6 +41,7 @@ def summary(rows):
         "validation_timeouts": _count(proposed, lambda r: _validation(r, lambda v: v["own_tests"] == "timeout")),
         "budget_exhausted": _count(rows, lambda r: r["outcome"] == "budget_exhausted"),
         "no_decision": _count(rows, lambda r: r["decision"] is None),
+        "model_stopped": _count(rows, lambda r: r["outcome"].startswith("model_")),
         "mean_turns": round(sum(r["turns"] for r in rows) / n, 1),
         "mean_tool_calls": round(sum(r["tool_calls"] for r in rows) / n, 1),
         "tokens": sum(r["tokens"] for r in rows), "cost_microusd": sum(r["cost_microusd"] for r in rows),
@@ -74,6 +75,7 @@ def findings(s):
                  ("false_dismissals", "{name} dismissed {k} real incidents."),
                  ("invalid_evidence", "{name} cited evidence it had not seen in {k} incidents."),
                  ("budget_exhausted", "{name} ran out of budget in {k} incidents."),
+                 ("model_stopped", "{name} got no answer from its model in {k} incidents (lane stopped or error)."),
                  ("validation_timeouts", "{name} had {k} patch validations time out."))
     for key, sentence in sentences:
         lines += [sentence.format(name=n, k=s[n][key]) for n in names if s[n][key]]
