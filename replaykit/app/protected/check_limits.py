@@ -13,8 +13,8 @@ class LimitChecks(unittest.TestCase):
         return lambda: self.app.web.checkout(user, "sku-1", 1)
 
     def test_many_customers_can_buy_one_product(self):
-        done = statuses(self.app, [(n * 500, self.buy(f"user-{n}")) for n in range(60)])
-        self.assertEqual(done, [200] * 60)
+        done = statuses(self.app, [(100 + n * 50, self.buy(f"user-{n}")) for n in range(12)])
+        self.assertEqual(done, [200] * 12)
 
     def test_one_busy_user_is_slowed_down(self):
         done = statuses(self.app, [(100, self.buy("bot"))] * 8, until=1_000)

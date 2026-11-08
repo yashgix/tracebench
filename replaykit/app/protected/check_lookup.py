@@ -22,7 +22,8 @@ class LookupChecks(unittest.TestCase):
 
         self.app.runtime.spawn(look())
         self.app.runtime.run(60_000)
-        self.assertLessEqual(finished, [50])
+        self.assertEqual(len(finished), 1)
+        self.assertLessEqual(finished[0], 50)
 
     def test_an_unknown_product_is_not_found(self):
         self.assertEqual(statuses(self.app, [(0, lambda: self.app.web.product("nope"))]), [404])

@@ -10,9 +10,17 @@ from shop.telemetry import Telemetry
 _names = itertools.count()
 
 
+def db_name():
+    return f"protected-{next(_names)}"
+
+
+def telemetry(runtime):
+    return Telemetry(runtime, random.Random(1))
+
+
 def shop(stock):
     runtime = Runtime()
-    return Shop(runtime, Telemetry(runtime, random.Random(1)), f"protected-shop-{next(_names)}", stock)
+    return Shop(runtime, telemetry(runtime), db_name(), stock)
 
 
 def statuses(app, requests, until=60_000):

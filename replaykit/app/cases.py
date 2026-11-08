@@ -6,7 +6,8 @@ GOOD, LEAK = "92b1aeb", "ee7027c"
 LIMITER, PER_PRODUCT = "5e058b3", "268076a"
 PER_USER, ORDER_CAP, LOG_WORDING = "e3ae795", "a2a4dc4", "828689b"
 QUERY_HELPER, ANY_CASE, LOWER_CASED = "ccc74e0", "0b1e0de", "bfc0fd2"
-AT = 10 * MINUTE
+AT, DURATION = 10 * MINUTE, 20 * MINUTE
+ALL_CHECKS = ["check_inventory.py", "check_limits.py", "check_orders.py", "check_lookup.py"]
 
 
 def _patch(service, fault_type, commit, file, function=None):
@@ -36,26 +37,24 @@ CASES = {
         "id": "c4", "baseline": QUERY_HELPER, "catalogue": 6000,
         "deploys": [{"at_ms": AT, "service": "inventory", "commit": ANY_CASE}],
         "truth": _patch("inventory", "slow_query", ANY_CASE, "shop/inventory.py", "Inventory.stock"),
-        "protected": ["check_inventory.py", "check_limits.py", "check_orders.py", "check_lookup.py"],
+        "protected": ALL_CHECKS,
     },
     "outside_lock": {
-        "id": "c5", "baseline": LOWER_CASED, "deploys": [], "db_lock": {"at_ms": AT, "until_ms": AT + 20 * MINUTE},
+        "id": "c5", "baseline": LOWER_CASED, "deploys": [], "db_lock": {"at_ms": AT},
         "truth": {"expected": "escalate"},
-        "protected": ["check_inventory.py", "check_limits.py", "check_orders.py", "check_lookup.py"],
+        "protected": ALL_CHECKS,
     },
     "load_test": {
         "id": "c6", "baseline": LOWER_CASED, "deploys": [],
         "load_test": {"user": "perf-loadtest", "sku": "sku-000", "start_ms": AT, "end_ms": AT + 110_000, "per_s": 100},
         "truth": {"expected": "dismiss"},
-        "protected": ["check_inventory.py", "check_limits.py", "check_orders.py", "check_lookup.py"],
+        "protected": ALL_CHECKS,
     },
 }
-for _case in CASES.values():
-    _case["duration_ms"] = 20 * MINUTE
-
 TRUSTED = ("truth", "protected")
 
 
 def case(name, seed):
     """The run description of case *name* at *seed*, without its truth or protected checks."""
-    return {key: value for key, value in CASES[name].items() if key not in TRUSTED} | {"seed": seed}
+    return {key: value for key, value in CASES[name].items() if key not in TRUSTED} | {"seed": seed,
+                                                                                         "duration_ms": DURATION}

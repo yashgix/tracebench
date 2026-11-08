@@ -60,14 +60,14 @@ class Deployment:
         self._opened.append(self._connector())
         return self._opened[-1]
 
-    def hold_lock(self, at_ms, until_ms):
-        """An outside job: a connection of its own holds a write transaction on `items` from *at_ms* to *until_ms*."""
+    def hold_lock(self, at_ms):
+        """An outside job: from *at_ms* to the end of the run, a connection of its own holds a write transaction on
+        `items`."""
         def begin():
-            self._job = self.connect()
-            self._job.execute("BEGIN IMMEDIATE")
-            self._job.execute("UPDATE items SET stock = stock WHERE rowid = 1")
+            job = self.connect()
+            job.execute("BEGIN IMMEDIATE")
+            job.execute("UPDATE items SET stock = stock WHERE rowid = 1")
         self.runtime.call_at(at_ms, begin)
-        self.runtime.call_at(until_ms, lambda: self._job.execute("COMMIT"))
 
     def close(self):
         """Close every database connection, leaked ones included, once the run is recorded."""

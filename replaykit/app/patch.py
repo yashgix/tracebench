@@ -15,9 +15,17 @@ from . import incident
 
 MAX_CHANGED, MAX_BYTES, TIMEOUT_S = 40, 8000, 120
 PATH = re.compile(r"shop/[a-z_]+\.py")
-LOCKED = ("shop/pool.py", "shop/runtime.py", "shop/telemetry.py")  # what the checks and the replay measure with
+# What the checks and the replay measure with: these files, and these settings in shop/config.py.
+LOCKED = ("shop/db.py", "shop/pool.py", "shop/runtime.py", "shop/telemetry.py")
+SETTINGS = ("QUERY_MS", "SCAN_US_PER_ROW", "POOL_REPORT_MS")
+INSTRUMENTS = re.compile(rf"\b(?:{'|'.join(SETTINGS)})\s*[^=\s]?=(?!=)")  # an assignment to one of them
 DENIED = ("exec", "eval", "open", "compile", "globals", "locals", "vars", "getattr", "setattr", "delattr", "exit",
           "quit", "print", "breakpoint", "input", "help", "sys", "os", "builtins", "sqlite3", "subprocess")
+# Names a patch may not add, as a name or an attribute: the denied names, every standard-library module (reachable
+# through modules the app imports), the interpreter's handles, and the database calls that run SQL.
+REACH = frozenset({*DENIED, *sys.stdlib_module_names, "bltns", "modules", "argv", "stdin", "stdout", "stderr",
+                   "execute", "executemany", "executescript", "enable_load_extension", "create_function",
+                   "set_authorizer"})
 INTERNALS = ("spans", "logs", "gauges", "in_use", "opened", "now", "_idle", "_waiters", "_queue", "_connect")
 SQL = ("ATTACH", "DETACH", "VACUUM", "PRAGMA", "LOAD_EXTENSION")
 FORBIDDEN = re.compile(rf"\bimport\b|__|\b(?:{'|'.join(DENIED)})\b|(?i:\b(?:{'|'.join(SQL)})\b)")
@@ -59,8 +67,10 @@ def check_patch(text):
             hunk = True
         elif hunk and line[:1] in ("+", "-"):
             changed += 1
-            if line[0] == "+" and FORBIDDEN.search(line[1:]):
-                raise ValueError(f"added lines must not import or reach internals: {line[:60]!r}")
+            if INSTRUMENTS.search(line):
+                raise ValueError(f"a patch may not change what the checks measure with: {line[:60]!r}")
+            if line[0] == "+" and (not line.isascii() or FORBIDDEN.search(line[1:])):
+                raise ValueError(f"added lines must be ASCII and must not import or reach internals: {line[:60]!r}")
         elif meta := META.fullmatch(line):
             named = meta.group(1) or named
         elif not (hunk and (line[:1] == " " or line == "" or line == "\\ No newline at end of file")):
@@ -73,8 +83,21 @@ def check_patch(text):
     return sorted(files), changed
 
 
-def check_count(checks):
-    return sum((ROOT / PROTECTED / name).read_text().count("    def test_") for name in checks)
+def check_ids(tree, checks):
+    """The ids (module.Class.test) of the protected checks in *checks* of the replaykit *tree*."""
+    ids = set()
+    for name in checks:
+        module = ast.parse((tree / PROTECTED / name).read_text())
+        ids |= {f"{name.removesuffix('.py')}.{cls.name}.{fn.name}" for cls in module.body
+                if isinstance(cls, ast.ClassDef) for fn in cls.body
+                if isinstance(fn, ast.FunctionDef) and fn.name.startswith("test_")}
+    return ids
+
+
+def _job(runner, args, cwd, clone):
+    """Run one job in a fresh scratch folder beside *clone*, which it may read but not change."""
+    scratch = Path(tempfile.mkdtemp(dir=clone.parent))
+    return runner(args, cwd, scratch, [clone])
 
 
 def _run(args, cwd, env=None, stdin=None):
@@ -92,11 +115,12 @@ class LocalRunner:
     root = None  # where job folders are made (None: the system's temporary folder)
     replaykit = ROOT  # the replaykit tree whose protected checks and replay the jobs run
 
-    def __call__(self, args, cwd, folder):
-        """(exit code, stdout) of `python -B *args*`, or None on timeout."""
+    def __call__(self, args, cwd, scratch, read):
+        """(exit code, stdout) of `python -B *args*`, writing only to *scratch*, or None on timeout. *read* (the
+        clone) is what a stricter runner must also let the job read."""
         profile = (f'(version 1)(allow default)(deny network*)(deny file-write*)'
-                   f'(allow file-write* (subpath "{Path(folder).resolve()}") (literal "/dev/null"))')
-        env = {"PATH": "/usr/bin:/bin", "TMPDIR": str(folder)}
+                   f'(allow file-write* (subpath "{Path(scratch).resolve()}") (literal "/dev/null"))')
+        env = {"PATH": "/usr/bin:/bin", "HOME": str(scratch), "TMPDIR": str(scratch)}
         done = _run(["/usr/bin/sandbox-exec", "-p", profile, sys.executable, "-B", *args], cwd, env)
         return None if done is None else (done.returncode, done.stdout)
 
@@ -123,9 +147,13 @@ def _flags(source):
     for node in ast.walk(ast.parse(source)):
         if isinstance(node, (ast.Import, ast.ImportFrom)):
             found["import"] += 1
-        elif isinstance(node, ast.Name) and (node.id in DENIED or node.id.startswith("__")):
+        elif isinstance(node, (ast.Name, ast.Attribute)) and isinstance(node.ctx, (ast.Store, ast.Del)) and (
+                getattr(node, "id", None) in SETTINGS or getattr(node, "attr", None) in SETTINGS):
+            found["setting"] += 1
+        elif isinstance(node, ast.Name) and (node.id in REACH or node.id.startswith("__")):
             found[node.id] += 1
-        elif isinstance(node, ast.Attribute) and (node.attr in INTERNALS or node.attr.startswith("__")):
+        elif isinstance(node, ast.Attribute) and (node.attr in REACH or node.attr in INTERNALS
+                                                  or node.attr.startswith("__")):
             found["." + node.attr] += 1
         elif isinstance(node, ast.Constant) and isinstance(node.value, str):
             found.update(word for word in SQL if word in node.value.upper())
@@ -145,7 +173,7 @@ def _check_code(repo, base, clone, files):
 
 
 def _own_tests(clone, runner):
-    done = runner(["-m", "unittest", "discover", "-s", "tests"], clone, clone.parent)
+    done = _job(runner, ["-m", "unittest", "discover", "-s", "tests"], clone, clone)
     return "timeout" if done is None else ("pass" if done[0] == 0 else "fail")
 
 
@@ -160,16 +188,26 @@ def _result(done, keys):
     return result if isinstance(result, dict) and set(result) == set(keys) else None
 
 
-def protected_result(result, checks):
-    """*result* if it is a complete run of every check in *checks*, else a failed one."""
-    if result is None or result["run"] != check_count(checks) or not isinstance(result["failed"], list):
+def protected_result(result, ids):
+    """*result* if it is a complete run of the checks with these *ids* that names only them, else a failed one."""
+    if (result is None or result["run"] != len(ids) or not isinstance(result["failed"], list)
+            or not set(result["failed"]) <= ids or len(set(result["failed"])) != len(result["failed"])):
         return {"run": 0, "failed": ["incomplete"]}
     return result
 
 
 def _protected(clone, checks, runner):
-    done = runner(["-I", str(runner.replaykit / PROTECTED / "run.py"), str(clone), *checks], clone.parent, clone.parent)
-    return protected_result(_result(done, ("run", "failed")), checks)
+    done = _job(runner, ["-I", str(runner.replaykit / PROTECTED / "run.py"), str(clone), *checks], clone.parent,
+                clone)
+    return protected_result(_result(done, ("run", "failed")), check_ids(runner.replaykit, checks))
+
+
+def replay_result(result):
+    """*result* if each field has its type (page, clean: bool; pool_in_use_end: int or None; web_errors: int)."""
+    valid = (result is not None and all(type(result[k]) is bool for k in ("page", "clean"))
+             and (result["pool_in_use_end"] is None or type(result["pool_in_use_end"]) is int)
+             and type(result["web_errors"]) is int)
+    return result if valid else {"page": None, "pool_in_use_end": None, "web_errors": None, "clean": False}
 
 
 def _replay(clone, case, service, base, patched, runner):
@@ -177,12 +215,9 @@ def _replay(clone, case, service, base, patched, runner):
                for d in case["deploys"]]
     if deploys == case["deploys"]:
         deploys = [{"at_ms": 0, "service": service, "commit": patched}, *deploys]
-    done = runner(["-m", "replaykit.app.patch", str(clone), json.dumps(case | {"deploys": deploys})], runner.replaykit,
-                  clone.parent)
-    result = _result(done, ("page", "pool_in_use_end", "web_errors", "clean"))
-    if result is None or not isinstance(result["clean"], bool):
-        return {"page": None, "pool_in_use_end": None, "web_errors": None, "clean": False}
-    return result
+    done = _job(runner, ["-m", "replaykit.app.patch", str(clone), json.dumps(case | {"deploys": deploys})],
+                runner.replaykit, clone)
+    return replay_result(_result(done, ("page", "pool_in_use_end", "web_errors", "clean")))
 
 
 def replay_summary(repo, case):
@@ -196,9 +231,9 @@ def replay_summary(repo, case):
             "clean": raw["page"] is None and end == 0}
 
 
-def validate_patch(repo, case, decision, base, checks, runner=LocalRunner()):
+def validate_patch(repo, case, decision, base, checks, runner):
     """Judge *decision*'s patch, made against *base* (the commit deployed for its service), on *case* (a run
-    description) with the protected *checks* (file names)."""
+    description) with the protected *checks* (file names), every job run by *runner*."""
     result = {"files": [], "changed_lines": 0, "applies": False, "error": None, "own_tests": None,
               "protected": None, "replay": None, "valid": False}
     try:

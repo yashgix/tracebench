@@ -64,6 +64,7 @@ class BundleTest(unittest.TestCase):
             self.assertNotIn(short, dump)
             self.assertEqual(call(CodeEvidence(self.incident), "diff", arg=short)["error"], f"unknown commit {short!r}")
 
+
 @needs_repo
 class CodeToolsTest(unittest.TestCase):
     def setUp(self):

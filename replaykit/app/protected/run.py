@@ -5,9 +5,8 @@ import sys
 import unittest
 from pathlib import Path
 
-sys.path.insert(0, sys.argv[1])
 here = Path(__file__).resolve().parent
-sys.path.insert(1, str(here))
+sys.path[:0] = [str(here), sys.argv[1]]  # the checks' own helpers first, so the tree cannot replace them
 loader = unittest.defaultTestLoader
 suite = unittest.TestSuite(loader.discover(str(here), pattern=name, top_level_dir=str(here)) for name in sys.argv[2:])
 result = unittest.TestResult()

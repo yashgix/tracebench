@@ -8,11 +8,13 @@ from pathlib import Path
 from replaykit.app import cases, world
 from replaykit.app.bundle import bundle
 from replaykit.app.incident import run_case
+from replaykit.app.patch import LocalRunner
 from replaykit.investigate import Reply
 
 REPO = Path.home() / "Projects" / "deeptrace-shopapp"
 FIX = (Path(__file__).resolve().parents[1] / "replaykit" / "app" / "protected" / "leak.patch").read_text()
 needs_repo = unittest.skipUnless(REPO.exists(), "needs the shop app repository")
+RUNNER = LocalRunner()
 
 
 @cache

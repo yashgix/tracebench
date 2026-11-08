@@ -5,12 +5,12 @@ import unittest
 from functools import cache
 from pathlib import Path
 
-from app_helpers import EMPTY, REPO, calls, edit, needs_repo, result, scripted
+from app_helpers import EMPTY, REPO, RUNNER, calls, edit, needs_repo, result, scripted
 from replaykit.app import cases
 from replaykit.app.bundle import bundle
 from replaykit.app.evaluate import run_app_case
 from replaykit.app.incident import run_case
-from replaykit.app.patch import ROOT, validate_patch
+from replaykit.app.patch import ROOT, check_patch, validate_patch
 
 FIXES = {name: (ROOT / "replaykit/app/protected" / f"{name}.patch").read_text()
          for name in ("config", "decoy", "slow_query")}
@@ -34,7 +34,7 @@ def validate(name, patch):
     truth = cases.CASES[name]["truth"]
     base = incident(name).code["deployed"][truth["service"]]
     return validate_patch(REPO, cases.case(name, 1), {"service": truth["service"], "patch": patch}, base,
-                          cases.CASES[name]["protected"])
+                          cases.CASES[name]["protected"], RUNNER)
 
 
 @needs_repo
@@ -114,10 +114,43 @@ class CasePatchTest(unittest.TestCase):
         self.assertEqual(outcome["protected"]["failed"],
                          ["check_lookup.LookupChecks.test_a_lookup_in_a_large_catalogue_is_quick"])
 
+    def test_a_per_product_limit_per_second_is_caught(self):
+        wrong = edit(cases.PER_PRODUCT, "shop/config.py", "CHECKOUT_LIMIT_WINDOW_MS = 60000", "CHECKOUT_LIMIT_WINDOW_MS = 1000")
+        failed = self.assertValid("config", wrong, False)["protected"]["failed"]
+        self.assertEqual(failed, ["check_limits.LimitChecks.test_many_customers_can_buy_one_product"])
+
     def test_dropping_the_any_case_lookup_is_caught(self):
         wrong = edit(cases.ANY_CASE, "shop/inventory.py", "WHERE lower(sku) = lower(?)", "WHERE sku = ?")
         failed = self.assertValid("slow_query", wrong, False)["protected"]["failed"]
         self.assertEqual(failed, ["check_lookup.LookupChecks.test_any_case_finds_the_product"])
+
+
+class InstrumentTest(unittest.TestCase):
+    """A patch may not change what the checks and the replay measure with, nor reach the interpreter."""
+
+    def test_cost_model_and_reporting_settings_are_refused(self):
+        for old, new in (("SCAN_US_PER_ROW = 300", "SCAN_US_PER_ROW = 0"), ("QUERY_MS = 4", "QUERY_MS = 0"),
+                         ("POOL_REPORT_MS = 15000", "POOL_REPORT_MS = 10**9")):
+            with self.subTest(new=new), self.assertRaisesRegex(ValueError, "what the checks measure"):
+                check_patch(edit(cases.ANY_CASE, "shop/config.py", old, new))
+        with self.assertRaisesRegex(ValueError, "shop/db.py"):
+            check_patch(edit(cases.ANY_CASE, "shop/db.py", "for table in SCAN.findall(plan)", "for table in []"))
+
+    def test_reaching_the_interpreter_through_modules_is_refused(self):
+        forge = """    async def report_pool(self):
+        _s = db.re.enum.\uff53\uff59\uff53
+        _s.stdout.write("{}")
+"""
+        tries = {"fullwidth name": forge,
+                 "module chain": forge.replace("\uff53\uff59\uff53", "bltns"),
+                 "split SQL": '        connection.execute("ATT" + "ACH DATABASE ? AS x", ("/tmp/x",))\n'}
+        for name, added in tries.items():
+            patch = edit(cases.ANY_CASE, "shop/inventory.py", "    async def report_pool(self):\n",
+                         added if name != "split SQL" else "    async def report_pool(self):\n" + added)
+            outcome = validate("slow_query", patch)
+            with self.subTest(name=name):
+                self.assertFalse(outcome["valid"])
+                self.assertIsNone(outcome["own_tests"], outcome["error"])  # refused before anything ran
 
 
 def decision(act, service="-", fault_type="-", commit="-", file="-", function="-", patch=""):
@@ -128,9 +161,12 @@ def decision(act, service="-", fault_type="-", commit="-", file="-", function="-
 
 # Per case: the calls an investigator makes, and what to cite from their results.
 STEPS = {
-    "config": ((("deploys", "web", "-"), ("logs", "web", "warn")), (("commits", "web", "-"), ("diff", "-", cases.PER_PRODUCT))),
-    "decoy": ((("deploys", "*", "-"), ("traces", "web", "error")), (("commits", "orders", "-"), ("diff", "-", cases.ORDER_CAP))),
-    "slow_query": ((("deploys", "inventory", "-"), ("traces", "web", "slow")), (("commits", "inventory", "-"), ("diff", "-", cases.ANY_CASE))),
+    "config": ((("deploys", "web", "-"), ("logs", "web", "warn")),
+               (("commits", "web", "-"), ("diff", "-", cases.PER_PRODUCT))),
+    "decoy": ((("deploys", "*", "-"), ("traces", "web", "error")),
+              (("commits", "orders", "-"), ("diff", "-", cases.ORDER_CAP))),
+    "slow_query": ((("deploys", "inventory", "-"), ("traces", "web", "slow")),
+                   (("commits", "inventory", "-"), ("diff", "-", cases.ANY_CASE))),
     "outside_lock": ((("deploys", "*", "-"), ("logs", "inventory", "error")), (("search", "inventory", "BEGIN"),)),
     "load_test": ((("deploys", "*", "-"), ("logs", "web", "warn")), (("metrics", "web", "http.server.request.count"),)),
 }
@@ -159,7 +195,8 @@ def cite(packet):
 
 
 def investigate(name, act):
-    return run_app_case(REPO, name, 1, scripted(*(calls(*step) for step in STEPS[name]), lambda p: act(cite(p))))
+    model = scripted(*(calls(*step) for step in STEPS[name]), lambda p: act(cite(p)))
+    return run_app_case(REPO, name, 1, model, RUNNER)
 
 
 @needs_repo
@@ -176,10 +213,19 @@ class CaseRehearsalTest(unittest.TestCase):
         self.assertEqual((outcome["root_cause_correct"], outcome["resolved"]), (False, False))
 
     def test_patching_or_dismissing_the_outside_lock_is_wrong(self):
+        retry = edit(cases.LOWER_CASED, "shop/inventory.py", 'f"database error: {exc}"', 'f"database busy: {exc}"')
         for act in (decision("dismiss"), decision("diagnose", "inventory", "code_defect", cases.LOWER_CASED,
-                                                  "shop/inventory.py")):
+                                                  "shop/inventory.py"),
+                    decision("patch", "inventory", "code_defect", cases.LOWER_CASED, "shop/inventory.py", "_query",
+                             retry)):
             with self.subTest(act=act([])["act"]):
                 self.assertFalse(investigate("outside_lock", act)["resolved"])
+
+    def test_a_valid_patch_to_another_file_is_not_a_fix_of_the_named_one(self):
+        named = decision("patch", "inventory", "slow_query", cases.ANY_CASE, "shop/config.py", "-", FIXES["slow_query"])
+        outcome = investigate("slow_query", named)
+        self.assertEqual((outcome["validation"]["valid"], outcome["patch_valid"], outcome["resolved"]),
+                         (True, False, False))
 
     def test_escalating_the_load_test_is_safe_but_not_resolved(self):
         outcome = investigate("load_test", decision("escalate", "web"))

@@ -4,7 +4,7 @@ import json
 import unittest
 from pathlib import Path
 
-from app_helpers import EMPTY, FIX, REPO, calls, edit, needs_repo, result, scripted
+from app_helpers import EMPTY, FIX, REPO, RUNNER, calls, edit, needs_repo, result, scripted
 from replaykit.app import actions, cases, tools
 from replaykit.app.evaluate import run_app_case
 
@@ -41,7 +41,7 @@ def honest_with(cite, patch=FIX):
 @needs_repo
 class SliceRehearsalTest(unittest.TestCase):
     def run_model(self, model):
-        return run_app_case(REPO, "leak", 1, model)
+        return run_app_case(REPO, "leak", 1, model, RUNNER)
 
     def test_an_honest_investigation_resolves_the_leak(self):
         outcome = self.run_model(honest())

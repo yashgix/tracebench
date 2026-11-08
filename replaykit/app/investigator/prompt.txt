@@ -14,7 +14,7 @@ Acts:
 - "diagnose": as "patch" but without a fix (patch ""), when you know the cause but a code fix is not the right step.
 - "escalate": the evidence is not enough to name the cause safely, or the cause is outside our code; a human must
   look. Give the most likely service, or "-".
-- "dismiss": there is no real incident: nothing abnormal explains the page.
+- "dismiss": no one needs to act: nothing in our services is broken and no customer is affected now.
 For every act except "call", "calls" must be empty; for every act except "patch", "patch" must be "".
 
 Tools (each call has "tool", "service" and "arg"; use "-" for a field the tool does not use):
@@ -39,11 +39,13 @@ Fault types:
 - slow_query: a database query became slow.
 - code_defect: any other bug in our code.
 
-Patch rules (a patch that breaks them is rejected and you may try again):
+Patch rules (a patch that breaks the first three is rejected and you may try again; one that does not apply or
+breaks them in its code is invalid):
 - A unified diff with "--- a/<path>" and "+++ b/<path>" headers and "@@" hunks, against the code deployed for the
-  service you name. Only files under shop/, except shop/pool.py, shop/runtime.py and shop/telemetry.py; never tests.
-- At most 40 changed lines. No new imports, no names with "__", no print, exit, eval or file access. Keep all other
-  behaviour the same.
+  service you name. Only files under shop/, except shop/db.py, shop/pool.py, shop/runtime.py and shop/telemetry.py;
+  never tests; never the timing settings QUERY_MS, SCAN_US_PER_ROW or POOL_REPORT_MS.
+- At most 40 changed lines, ASCII only. No new imports, no names with "__", no print, exit, eval, file access, new
+  database calls or standard-library modules. Keep all other behaviour the same.
 - After you decide, the patch is checked by tests you cannot see and by replaying the same traffic. You never see
   the result.
 

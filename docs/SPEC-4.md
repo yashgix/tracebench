@@ -45,12 +45,16 @@ Incident ids are opaque (`shop-app:c<N>:<seed>`), so neither ids nor run descrip
 - `resolved`: decision correct, and for diagnose/patch also location and evidence, and for patch a valid patch.
 
 ## B4. Patch validation (trusted) and the execution boundary
-- Static check (unchanged from the slice): only `shop/*.py` except the three instruments, at most 40 changed lines,
-  plain unified diff, added lines may not import or reach internals. After a fresh clone at the deployed commit and
-  `git apply`, an AST comparison refuses new imports, dunders, denied names and SQL, and harness internals.
+- Static check: only `shop/*.py` except the instrument files, no assignment to an instrument setting, at most 40
+  changed lines, plain unified diff, added lines ASCII only and without imports or denied names (a break here is a
+  rejected reply: one more try). After a fresh clone at the deployed commit and `git apply`, an AST comparison
+  refuses any new import, dunder, store or delete of an instrument setting, and any new name or attribute in `REACH`
+  (denied names, every standard-library module name, the interpreter's handles, `.execute` and the other SQL entry
+  points) or among the harness internals (a break here makes the patch invalid).
 - Then three runs: the app's own tests, the case's protected checks (`run.py <tree> <check files>`), and the same
-  traffic with the patched commit deployed. Valid = own tests pass, every protected check runs and passes, and the replay is clean (no page, pool back
-  to 0). Each case lists its protected checks: its own and the earlier ones that apply to its code
+  traffic with the patched commit deployed. Valid = own tests pass, every protected check runs and passes, and the
+  replay is clean (no page, pool back to 0). A patch counts as the decision's fix only if it changes the decision's
+  file. Each case lists its protected checks: its own and the earlier ones that apply to its code
   (`replaykit/app/protected/check_*.py`, never in the bundle, never shown to the model): `check_inventory` (connections
   come back), `check_limits` (one busy user is slowed, a product's many buyers are not), `check_orders` (an order over
   the cap is a 4xx and takes no stock), `check_lookup` (any case matches, under 50 ms in 6,000 rows). Reference fixes:
@@ -58,14 +62,20 @@ Incident ids are opaque (`shop-app:c<N>:<seed>`), so neither ids nor run descrip
 - **Boundary:** the patched code runs only inside those three runs. For any model-written patch they run as the
   `_arcexec` account through the coordinator's existing `sandbox.run` (Seatbelt, no network, the home folder hidden,
   reads limited to the clone, replaykit and the interpreter, writes only to a scratch folder). The trusted side
-  builds the clone, reads only each run's stdout file and accepts only an exact result shape. A runner has `root`
-  (where job folders go), `replaykit` (the tree the jobs run) and is called with (args, cwd, job folder). Tests and
-  scripted rehearsals use `LocalRunner` (sandbox-exec as the same user).
+  builds the clone, reads only each run's stdout file and accepts only an exact result: the expected keys and types,
+  and failed checks named only by real check ids of that run's list. Each job gets its own fresh scratch folder and
+  may read but not change the clone. A runner has `root` (where job folders go), `replaykit` (the tree the jobs run)
+  and is called with (args, cwd, scratch, read); `validate_patch` and `run_app_case` have no default runner. Tests and
+  scripted rehearsals pass `LocalRunner` (sandbox-exec as the same user: no network, writes only to scratch, reads
+  not limited, so never for a model's patch).
 - **Named limit:** the protected checks and the replay import the patched code, so they run in its process; a
-  malicious patch could forge their output. The AST rules make that hard, the boundary keeps it from files, keys and
-  the network, and a human reviews every patch before anything is merged. "Protected" means the model never sees the
-  checks; it does not make their results tamper-proof.
+  malicious patch could forge their output. The text and AST rules close the bypasses found so far (fullwidth
+  names, module chains such as `db.re.enum.bltns`, split SQL) but are not a proof; the boundary keeps a forging patch
+  from files, keys and the network; and a human reviews every patch before anything is merged. "Protected" means
+  the model never sees the checks; it does not make their results tamper-proof.
 
 ## B5. Limits
 Simulated clock and SQLite in memory (an application-level demo, not a Postgres equivalent); one app, six cases;
-query cost is a model of the plan, not measured time; per-minute metrics; the page rule is fixed.
+query cost is a model of the plan, not measured time; per-minute metrics; the page rule is fixed. As in SPEC-3, an
+escalation or dismissal needs no evidence, so an "always escalate" stub resolves c5 and an "always dismiss" stub c6
+(and fails the other five); reports show each case.

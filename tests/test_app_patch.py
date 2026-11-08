@@ -7,9 +7,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from app_helpers import FIX, REPO, edit, needs_repo
+from app_helpers import FIX, REPO, RUNNER, edit, needs_repo
 from replaykit.app import cases, world
-from replaykit.app.patch import PROTECTED, ROOT, check_patch, protected_result, validate_patch
+from replaykit.app.patch import (PROTECTED, ROOT, check_ids, check_patch, protected_result, replay_result,
+                                 validate_patch)
 
 LEAKY_RESERVE = """            connection = await self._connection()
             stock = await self._read_stock(connection, sku)
@@ -17,9 +18,9 @@ LEAKY_RESERVE = """            connection = await self._connection()
 """
 
 
-def validate(patch, service="inventory", base=cases.LEAK):
+def validate(patch, service="inventory", base=cases.LEAK, runner=RUNNER):
     return validate_patch(REPO, cases.case("leak", 1), {"service": service, "patch": patch}, base,
-                          cases.CASES["leak"]["protected"])
+                          cases.CASES["leak"]["protected"], runner)
 
 
 class CheckPatchTest(unittest.TestCase):
@@ -127,22 +128,52 @@ class ValidatePatchTest(unittest.TestCase):
         self.assertEqual((result["applies"], result["own_tests"], result["valid"]), (False, None, False))
         self.assertEqual(result["error"], "the patch adds .spans to shop/inventory.py")
 
-    def test_patched_code_cannot_write_outside_its_folder(self):
-        with tempfile.TemporaryDirectory() as folder:
-            target = Path(folder) / "escaped.db"
-            sql = f"connection.execute(\"ATT\" + \"ACH DATABASE '{target}' AS e\")\n"
-            patch = edit(cases.LEAK, "shop/inventory.py", "            self._check_available(sku, stock, quantity)\n",
-                         "            " + sql + "            self._check_available(sku, stock, quantity)\n")
-            result = validate(patch)
-            self.assertFalse(target.exists())
-        self.assertTrue(result["applies"])
-        self.assertFalse(result["valid"])
+    def test_split_sql_is_refused_after_apply(self):
+        sql = 'connection.execute("ATT" + "ACH DATABASE ? AS e", ("/tmp/e.db",))\n'
+        patch = edit(cases.LEAK, "shop/inventory.py", "            self._check_available(sku, stock, quantity)\n",
+                     "            " + sql + "            self._check_available(sku, stock, quantity)\n")
+        result = validate(patch)
+        self.assertEqual((result["applies"], result["own_tests"]), (False, None))
+        self.assertIn(".execute", result["error"])
 
-    def test_an_incomplete_protected_run_fails(self):
-        checks = cases.CASES["leak"]["protected"]
-        self.assertEqual(protected_result({"run": 0, "failed": []}, checks), {"run": 0, "failed": ["incomplete"]})
-        self.assertEqual(protected_result(None, checks), {"run": 0, "failed": ["incomplete"]})
-        self.assertEqual(protected_result({"run": 5, "failed": []}, checks), {"run": 5, "failed": []})
+    def test_a_job_writes_only_its_scratch_folder(self):
+        probe = ("import sys\nfor path in sys.argv[1:]:\n    try:\n        open(path, 'w').close()\n"
+                 "        print('wrote', path)\n    except OSError:\n        print('refused', path)\n")
+        with tempfile.TemporaryDirectory() as folder:
+            clone, scratch, outside = (Path(folder) / name for name in ("clone", "scratch", "outside.txt"))
+            clone.mkdir(), scratch.mkdir()
+            targets = [scratch / "ok.txt", clone / "planted.py", outside]
+            code, out = RUNNER(["-c", probe, *map(str, targets)], folder, scratch, [clone])
+        self.assertEqual(out.split(), ["wrote", str(targets[0]), "refused", str(targets[1]),
+                                       "refused", str(targets[2])])
+
+    def test_no_job_may_write_the_clone(self):
+        seen = []
+
+        def recording(args, cwd, scratch, read):
+            seen.append((Path(scratch), [Path(r) for r in read]))
+            return RUNNER(args, cwd, scratch, read)
+
+        recording.root, recording.replaykit = RUNNER.root, RUNNER.replaykit
+        self.assertTrue(validate(FIX, runner=recording)["valid"])
+        self.assertEqual(len(seen), 3)
+        self.assertEqual(len({scratch for scratch, _ in seen}), 3)
+        for scratch, (clone,) in seen:
+            self.assertFalse(clone.is_relative_to(scratch) or scratch.is_relative_to(clone))
+
+    def test_an_incomplete_or_unknown_protected_result_fails(self):
+        ids, incomplete = check_ids(ROOT, cases.CASES["leak"]["protected"]), {"run": 0, "failed": ["incomplete"]}
+        known = "check_inventory.InventoryChecks.test_unknown_product_returns_the_connection"
+        self.assertEqual(len(ids), 5)
+        for bad in (None, {"run": 0, "failed": []}, {"run": 5, "failed": ["CANARY"]}, {"run": 5, "failed": [known] * 2}):
+            self.assertEqual(protected_result(bad, ids), incomplete)
+        self.assertEqual(protected_result({"run": 5, "failed": [known]}, ids), {"run": 5, "failed": [known]})
+
+    def test_a_replay_result_must_have_its_types(self):
+        good = {"page": False, "pool_in_use_end": 0, "web_errors": 0, "clean": True}
+        self.assertEqual(replay_result(good), good)
+        for field, value in (("page", "CANARY"), ("pool_in_use_end", "0"), ("web_errors", 0.5), ("clean", 1)):
+            self.assertFalse(replay_result(good | {field: value})["clean"])
 
     def test_a_forbidden_patch_never_runs(self):
         result = validate(FIX.replace("+            try:", "+            import os"))

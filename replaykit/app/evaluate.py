@@ -6,7 +6,7 @@ from .actions import parse_action
 from .bundle import bundle
 from .cases import CASES, case
 from .incident import run_case
-from .patch import LocalRunner, validate_patch
+from .patch import validate_patch
 from .tools import CodeEvidence
 
 LIMITS = Limits(turns=15, tool_calls=25, tokens=200_000, model_ms=600_000)
@@ -27,7 +27,7 @@ def score_app(truth, inv, validation):
     root_cause = names_cause and all(decision[key] == truth.get(key) for key in ("service", "fault_type", "commit"))
     location = root_cause and decision["file"] == truth["file"] and (
         truth["function"] is None or _names_function(decision["function"], truth["function"]))
-    patch_valid = validation is not None and validation["valid"]
+    patch_valid = validation is not None and validation["valid"] and decision["file"] in validation["files"]
     decision_correct = act == truth["expected"]
     resolved = decision_correct and (truth["expected"] not in ("diagnose", "patch") or (location and evidence_valid))
     return {
@@ -39,7 +39,7 @@ def score_app(truth, inv, validation):
     }
 
 
-def run_app_case(repo, name, seed, model, limits=LIMITS, runner=LocalRunner()):
+def run_app_case(repo, name, seed, model, runner, limits=LIMITS):
     """Investigate case *name* at *seed* of the app in *repo* with *model* and return the scored result; a patch is
     validated through *runner*."""
     run = case(name, seed)

@@ -1,24 +1,20 @@
 """Protected checks (never shown to the investigator): inventory gives every connection back and still behaves."""
 
-import itertools
-import random
 import unittest
 
+from _shop import db_name, telemetry
 from shop import db
 from shop.inventory import Inventory
 from shop.rpc import ServiceError
 from shop.runtime import Runtime
-from shop.telemetry import Telemetry
-
-_names = itertools.count()
 
 
 class InventoryChecks(unittest.TestCase):
     def setUp(self):
         self.runtime = Runtime()
-        self.connect, self.opened = db.connector(f"protected-{next(_names)}"), 0
+        self.connect, self.opened = db.connector(db_name()), 0
         self.keeper = db.create(self.connect, {"sku-1": 3, "sku-2": 0})
-        self.inventory = Inventory(self.runtime, Telemetry(self.runtime, random.Random(1)), self.counted)
+        self.inventory = Inventory(self.runtime, telemetry(self.runtime), self.counted)
 
     def counted(self):
         self.opened += 1
