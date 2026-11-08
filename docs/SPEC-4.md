@@ -65,7 +65,8 @@ Incident ids are opaque (`shop-app:c<N>:<seed>`), so neither ids nor run descrip
   and never scan a table, under any alias; each of four lookups (`sku-5999`, `sku-4242`, `Sku-4321` and a miss, 10 s apart)
   takes at most 200 SQLite steps, counted per statement by a progress handler on those connections, with only
   `CREATE INDEX` (after any SQL comment) left out of the first lookup's count: correct fixes take 14-22, a range over the whole catalogue
-  36,013; a read right after a reservation shows it). Reference fixes:
+  36,013; after a reservation, reads in lower, upper and title case all show it, also after a read that
+  overlapped it at any offset from 4 ms before to 11 ms after its start, with or without a read first). Reference fixes:
   `protected/<case>.patch`.
 - **Boundary:** the patched code runs only inside those three runs. For any model-written patch they run as the
   `_arcexec` account through the coordinator's existing `sandbox.run` (Seatbelt, no network, the home folder hidden,

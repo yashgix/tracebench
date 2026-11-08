@@ -29,6 +29,15 @@ ALIASED_SCAN = ('try:\n' + ' ' * 20 + 'await self._query(connection, "SELECT sto
                 'lower(?)", (sku,))\n' + ' ' * 16 + 'except ServiceError:\n' + ' ' * 20 + 'pass\n')
 SCAN_ALIASED = edit(cases.ANY_CASE, "shop/inventory.py", LOOKUP,
                     LOOKUP.replace("lower(sku)", "sku") + ' ' * 16 + ALIASED_SCAN)
+# A lookup kept in `self.known` by lower-cased code, and its entry dropped.
+KNOWN = ("        self.running = True\n", "        self.running = True\n        self.known = {}\n")
+CACHE_READ = ('if sku.lower() not in self.known:\n' + ' ' * 20 + 'self.known[sku.lower()] = await self._query('
+              'connection, "SELECT stock FROM items WHERE sku = lower(?)", (sku,))\n')
+CACHE_ROWS = " " * 16 + "rows = self.known[sku.lower()]\n"
+CACHE_DROP = " " * 16 + "self.known.pop(sku.lower(), None)\n"
+RESERVE_READ = " " * 16 + "stock = await self._read_stock(connection, sku)\n"
+UPDATE = (" " * 16 + 'await self._query(connection, "UPDATE items SET stock = stock - ? WHERE sku = ?", '
+          "(quantity, sku))\n")
 SCAN_BESIDE = edit(cases.ANY_CASE, "shop/inventory.py", QUERY, FAKE, LOOKUP, LOOKUP.replace("lower(sku)", "sku")
                    + ' ' * 16 + 'await self._query(connection, "SELECT count(*) FROM items", ())\n')
 
@@ -40,6 +49,7 @@ def per_user(window_ms):
 
 WINDOW_CHECK = "check_limits.LimitChecks.test_the_limit_holds_for_one_second_then_starts_again"
 INDEX_CHECK = "check_lookup.LookupChecks.test_a_lookup_reads_the_catalogue_through_its_index"
+RESERVATION_CHECK = "check_lookup.LookupChecks.test_a_lookup_shows_a_reservation"
 # The commit right after each defect: its fix on main.
 FIXED = {"config": cases.PER_USER, "decoy": "4a4338c", "slow_query": cases.LOWER_CASED}
 
@@ -142,7 +152,8 @@ class CasePatchTest(unittest.TestCase):
         outcome = self.assertValid("slow_query", wrong, False)
         self.assertEqual((outcome["own_tests"], outcome["replay"]["clean"]), ("fail", False))
         self.assertEqual(outcome["protected"]["failed"],
-                         ["check_lookup.LookupChecks.test_a_lookup_in_a_large_catalogue_is_quick", INDEX_CHECK])
+                         ["check_lookup.LookupChecks.test_a_lookup_in_a_large_catalogue_is_quick", INDEX_CHECK,
+                          RESERVATION_CHECK])
 
     def test_a_per_product_limit_per_second_is_caught(self):
         wrong = edit(cases.PER_PRODUCT, "shop/config.py", "CHECKOUT_LIMIT_WINDOW_MS = 60000", "CHECKOUT_LIMIT_WINDOW_MS = 1000")
@@ -192,10 +203,7 @@ class CasePatchTest(unittest.TestCase):
                    + '\n' + indent + LOOKUP)
         upper = ("if sku == sku.lower():\n" + indent + "    " + exact + indent + "else:\n" + indent + "    " + walk)
         miss = LOOKUP.replace("lower(sku) = lower(?)", "sku = lower(?)") + indent + "if not rows:\n" + indent + "    "
-        reservation = "check_lookup.LookupChecks.test_a_lookup_shows_a_reservation"
-        tries = {"walk once, then a cache": (("        self.running = True\n",
-                                              "        self.running = True\n        self.known = {}\n", LOOKUP, cache),
-                                             [INDEX_CHECK, reservation]),
+        tries = {"walk once, then a cache": ((*KNOWN, LOOKUP, cache), [INDEX_CHECK, RESERVATION_CHECK]),
                  "an index rebuilt on every lookup": ((LOOKUP, rebuild), [INDEX_CHECK]),
                  "a walk only for a miss": ((LOOKUP, miss + walk), [INDEX_CHECK]),
                  "a walk only for upper case": ((LOOKUP, upper), [INDEX_CHECK]),
@@ -207,22 +215,31 @@ class CasePatchTest(unittest.TestCase):
                 self.assertEqual(outcome["protected"]["failed"], expected)
 
     def test_a_stale_cache_is_caught(self):
-        indent, key = " " * 16, "self.known[sku.lower()]"
-        read = (f'if sku.lower() not in self.known:\n{indent}    {key} = await self._query(connection, '
-                '"SELECT stock FROM items WHERE sku = lower(?)", (sku,))\n')
-        rows = f"{indent}rows = {key}\n"
         # Codex's (chatgpt/94): each entry dropped after one second, so reads seconds apart look fresh.
-        expire = f"{indent}    self.runtime.spawn(self.forget(sku.lower()))\n"
+        expire = " " * 20 + "self.runtime.spawn(self.forget(sku.lower()))\n"
         forget = ("    async def report_pool(self):\n", "    async def forget(self, key):\n        await self.runtime."
                   "sleep(1000)\n        self.known.pop(key, None)\n\n    async def report_pool(self):\n")
-        known = ("        self.running = True\n", "        self.running = True\n        self.known = {}\n")
-        tries = {"kept for ever": (*known, LOOKUP, read + rows),
-                 "kept for a second": (*known, LOOKUP, read + expire + rows, *forget)}
+
+        def as_asked(text):
+            return text.replace("sku.lower()", "sku")
+
+        tries = {"kept for ever": (*KNOWN, LOOKUP, CACHE_READ + CACHE_ROWS),
+                 "kept for a second": (*KNOWN, LOOKUP, CACHE_READ + expire + CACHE_ROWS, *forget),
+                 # Codex's (chatgpt/96): kept under the code as asked, so `SKU-007` outlives a reservation of
+                 # `sku-007`; dropped before the update, so a read overlapping the reservation keeps the old stock.
+                 "kept under the code as asked": (*KNOWN, LOOKUP, as_asked(CACHE_READ + CACHE_ROWS),
+                                                  UPDATE, UPDATE + as_asked(CACHE_DROP)),
+                 "dropped before the update": (*KNOWN, LOOKUP, CACHE_READ + CACHE_ROWS,
+                                               RESERVE_READ, CACHE_DROP + RESERVE_READ),
+                 # Read before the update, stored after the drop: caught only when no read filled the cache first.
+                 "stored late": (*KNOWN, LOOKUP, CACHE_READ.replace("self.known[sku.lower()] = await", "found = await")
+                                 + " " * 20 + "await self.runtime.sleep(10)\n" + " " * 20
+                                 + "self.known[sku.lower()] = found\n" + CACHE_ROWS, UPDATE, UPDATE + CACHE_DROP)}
         for name, pairs in tries.items():
             with self.subTest(name=name):
                 failed = self.assertValid("slow_query", edit(cases.ANY_CASE, "shop/inventory.py", *pairs),
                                           False)["protected"]["failed"]
-                self.assertEqual(failed, ["check_lookup.LookupChecks.test_a_lookup_shows_a_reservation"])
+                self.assertEqual(failed, [RESERVATION_CHECK])
 
     def test_a_lookup_that_skips_the_database_is_caught(self):
         stock = '[(int(sku.lower().split("-")[1]) % 50 + 1,)] if sku.lower().startswith("sku-") else []'
@@ -239,7 +256,11 @@ class CasePatchTest(unittest.TestCase):
                  "expression index": (LOOKUP, 'await self._query(connection, "CREATE INDEX IF NOT EXISTS '
                                       'item_lower ON items(lower(sku))", ())\n' + ' ' * 16 + LOOKUP),
                  "commented index": (LOOKUP, 'await self._query(connection, "/* lookups */ CREATE INDEX IF NOT '
-                                     'EXISTS item_lower ON items(lower(sku))", ())\n' + ' ' * 16 + LOOKUP)}
+                                     'EXISTS item_lower ON items(lower(sku))", ())\n' + ' ' * 16 + LOOKUP),
+                 "a cache dropped after the update": (*KNOWN, LOOKUP, CACHE_READ + CACHE_ROWS,
+                                                      UPDATE, UPDATE + CACHE_DROP),
+                 "a cache set after the update": (*KNOWN, LOOKUP, CACHE_READ + CACHE_ROWS, UPDATE, UPDATE + " " * 16
+                                                  + "self.known[sku.lower()] = [(stock - quantity,)]\n")}
         for name, pairs in fixes.items():
             with self.subTest(name=name):
                 self.assertValid("slow_query", edit(cases.ANY_CASE, "shop/inventory.py", *pairs), True)
@@ -253,7 +274,7 @@ class CasePatchTest(unittest.TestCase):
     def test_dropping_the_any_case_lookup_is_caught(self):
         wrong = edit(cases.ANY_CASE, "shop/inventory.py", "WHERE lower(sku) = lower(?)", "WHERE sku = ?")
         failed = self.assertValid("slow_query", wrong, False)["protected"]["failed"]
-        self.assertEqual(failed, ["check_lookup.LookupChecks.test_any_case_finds_the_product"])
+        self.assertEqual(failed, [RESERVATION_CHECK, "check_lookup.LookupChecks.test_any_case_finds_the_product"])
 
 
 class InstrumentTest(unittest.TestCase):

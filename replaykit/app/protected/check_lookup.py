@@ -1,5 +1,6 @@
 """Protected checks (never shown to the investigator): product codes match in any case, quickly, in a big catalogue."""
 
+import itertools
 import re
 import unittest
 
@@ -8,6 +9,7 @@ from shop.rpc import ServiceError
 
 CATALOGUE = {f"sku-{i:03d}": i % 50 + 1 for i in range(6000)}
 STEP_BUDGET = 200
+SPELLINGS = (str.lower, str.upper, str.title)  # sku-007, SKU-007, Sku-007
 INDEX = re.compile(r"(?:\s|/\*.*?\*/|--[^\n]*\n)*CREATE\s+(?:UNIQUE\s+)?INDEX\b", re.I | re.S)
 
 
@@ -20,13 +22,32 @@ class LookupChecks(unittest.TestCase):
         self.assertEqual(statuses(self.app, [(0, lambda: self.app.web.product("Sku-4321"))]), [200])
 
     def test_a_lookup_shows_a_reservation(self):
-        inventory = self.app.inventory
+        # Read in one spelling or not at all, reserve, read in another at every offset into the reservation (that
+        # read may show either stock), then read in all three spellings: each must show the reservation.
+        inventory, requests, allowed = self.app.inventory, [], {}
 
-        async def read_reserve_read():
-            return [await inventory.stock("sku-007"), await inventory.reserve("sku-007", 3),
-                    await inventory.stock("sku-007")]
+        def call(key, values, at, method, *args):
+            async def run():
+                try:
+                    return key, await method(*args)
+                except ServiceError as error:
+                    return key, error.status
+            requests.append((at, run))
+            allowed[key] = values
 
-        self.assertEqual(statuses(self.app, [(0, read_reserve_read)]), [[8, 5, 5]])
+        tries = itertools.product(range(-4, 12), (None, *SPELLINGS), SPELLINGS)
+        skus = (sku for sku, stock in CATALOGUE.items() if stock > 3)
+        for n, ((offset, first, during), sku) in enumerate(zip(tries, skus)):
+            start, stock, left = n * 100, CATALOGUE[sku], CATALOGUE[sku] - 3
+            if first:
+                call((n, "first"), {stock}, start, inventory.stock, first(sku))
+            call((n, "reserve"), {left}, start + 20, inventory.reserve, sku, 3)
+            call((n, "during"), {stock, left}, start + 20 + offset, inventory.stock, during(sku))
+            for spell in SPELLINGS:
+                call((n, spell.__name__), {left}, start + 80, inventory.stock, spell(sku))
+        seen = dict(statuses(self.app, requests))
+        self.assertEqual(seen.keys(), allowed.keys())
+        self.assertEqual({key: value for key, value in seen.items() if value not in allowed[key]}, {})
 
     def test_a_lookup_in_a_large_catalogue_is_quick(self):
         finished = []
