@@ -207,13 +207,22 @@ class CasePatchTest(unittest.TestCase):
                 self.assertEqual(outcome["protected"]["failed"], expected)
 
     def test_a_stale_cache_is_caught(self):
-        memo = ('if sku.lower() not in self.known:\n' + ' ' * 20 + 'self.known[sku.lower()] = await self._query('
-                'connection, "SELECT stock FROM items WHERE sku = lower(?)", (sku,))\n' + ' ' * 16
-                + 'rows = self.known[sku.lower()]\n')
-        wrong = edit(cases.ANY_CASE, "shop/inventory.py", "        self.running = True\n",
-                     "        self.running = True\n        self.known = {}\n", LOOKUP, memo)
-        failed = self.assertValid("slow_query", wrong, False)["protected"]["failed"]
-        self.assertEqual(failed, ["check_lookup.LookupChecks.test_a_lookup_shows_a_reservation"])
+        indent, key = " " * 16, "self.known[sku.lower()]"
+        read = (f'if sku.lower() not in self.known:\n{indent}    {key} = await self._query(connection, '
+                '"SELECT stock FROM items WHERE sku = lower(?)", (sku,))\n')
+        rows = f"{indent}rows = {key}\n"
+        # Codex's (chatgpt/94): each entry dropped after one second, so reads seconds apart look fresh.
+        expire = f"{indent}    self.runtime.spawn(self.forget(sku.lower()))\n"
+        forget = ("    async def report_pool(self):\n", "    async def forget(self, key):\n        await self.runtime."
+                  "sleep(1000)\n        self.known.pop(key, None)\n\n    async def report_pool(self):\n")
+        known = ("        self.running = True\n", "        self.running = True\n        self.known = {}\n")
+        tries = {"kept for ever": (*known, LOOKUP, read + rows),
+                 "kept for a second": (*known, LOOKUP, read + expire + rows, *forget)}
+        for name, pairs in tries.items():
+            with self.subTest(name=name):
+                failed = self.assertValid("slow_query", edit(cases.ANY_CASE, "shop/inventory.py", *pairs),
+                                          False)["protected"]["failed"]
+                self.assertEqual(failed, ["check_lookup.LookupChecks.test_a_lookup_shows_a_reservation"])
 
     def test_a_lookup_that_skips_the_database_is_caught(self):
         stock = '[(int(sku.lower().split("-")[1]) % 50 + 1,)] if sku.lower().startswith("sku-") else []'
@@ -228,10 +237,18 @@ class CasePatchTest(unittest.TestCase):
                                    "return await db.query(runtime=self.runtime, connection=connection, sql=sql, "
                                    "params=params)"),
                  "expression index": (LOOKUP, 'await self._query(connection, "CREATE INDEX IF NOT EXISTS '
-                                      'item_lower ON items(lower(sku))", ())\n' + ' ' * 16 + LOOKUP)}
+                                      'item_lower ON items(lower(sku))", ())\n' + ' ' * 16 + LOOKUP),
+                 "commented index": (LOOKUP, 'await self._query(connection, "/* lookups */ CREATE INDEX IF NOT '
+                                     'EXISTS item_lower ON items(lower(sku))", ())\n' + ' ' * 16 + LOOKUP)}
         for name, pairs in fixes.items():
             with self.subTest(name=name):
                 self.assertValid("slow_query", edit(cases.ANY_CASE, "shop/inventory.py", *pairs), True)
+
+    def test_a_fix_in_two_files_needs_no_git_header_lines(self):
+        lookup = edit(cases.ANY_CASE, "shop/inventory.py", LOOKUP, LOOKUP.replace("lower(sku)", "sku"))
+        note = edit(cases.ANY_CASE, "shop/web.py", "class Web:\n", "# Product pages read stock by code.\nclass Web:\n")
+        self.assertNotIn("diff --git", lookup + note)
+        self.assertValid("slow_query", lookup + note, True)
 
     def test_dropping_the_any_case_lookup_is_caught(self):
         wrong = edit(cases.ANY_CASE, "shop/inventory.py", "WHERE lower(sku) = lower(?)", "WHERE sku = ?")
@@ -288,6 +305,7 @@ class InstrumentTest(unittest.TestCase):
                  "module chain": forge.replace("\uff53\uff59\uff53", "bltns"),
                  "stdlib module": "    async def report_pool(self):\n        _unused = db.re\n",
                  "step count off": "    async def report_pool(self):\n        self.pool.set_progress_handler(None, 0)\n",
+                 "a class called": "    async def report_pool(self):\n        _unused = type(self.pool)\n",
                  "split SQL": '        connection.execute("ATT" + "ACH DATABASE ? AS x", ("/tmp/x",))\n'}
         for name, added in tries.items():
             patch = edit(cases.ANY_CASE, "shop/inventory.py", "    async def report_pool(self):\n",

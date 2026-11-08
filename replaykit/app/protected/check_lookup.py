@@ -8,7 +8,7 @@ from shop.rpc import ServiceError
 
 CATALOGUE = {f"sku-{i:03d}": i % 50 + 1 for i in range(6000)}
 STEP_BUDGET = 200
-INDEX = re.compile(r"\s*CREATE\s+(UNIQUE\s+)?INDEX\b", re.I)
+INDEX = re.compile(r"(?:\s|/\*.*?\*/|--[^\n]*\n)*CREATE\s+(?:UNIQUE\s+)?INDEX\b", re.I | re.S)
 
 
 class LookupChecks(unittest.TestCase):
@@ -21,9 +21,12 @@ class LookupChecks(unittest.TestCase):
 
     def test_a_lookup_shows_a_reservation(self):
         inventory = self.app.inventory
-        self.assertEqual(statuses(self.app, [(0, lambda: inventory.stock("sku-007")),
-                                             (10_000, lambda: inventory.reserve("sku-007", 3)),
-                                             (20_000, lambda: inventory.stock("sku-007"))]), [8, 5, 5])
+
+        async def read_reserve_read():
+            return [await inventory.stock("sku-007"), await inventory.reserve("sku-007", 3),
+                    await inventory.stock("sku-007")]
+
+        self.assertEqual(statuses(self.app, [(0, read_reserve_read)]), [[8, 5, 5]])
 
     def test_a_lookup_in_a_large_catalogue_is_quick(self):
         finished = []

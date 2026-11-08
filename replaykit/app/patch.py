@@ -22,10 +22,11 @@ INSTRUMENTS = re.compile(rf"\b(?:{'|'.join(SETTINGS)})\s*[^=\s]?=(?!=)")  # an a
 DENIED = ("exec", "eval", "open", "compile", "globals", "locals", "vars", "getattr", "setattr", "delattr", "exit",
           "quit", "print", "breakpoint", "input", "help", "sys", "os", "builtins", "sqlite3", "subprocess")
 # Names a patch may not add, as a name or an attribute: the denied names, every standard-library module (reachable
-# through modules the app imports), the interpreter's handles, and the database calls that run SQL.
+# through modules the app imports), the interpreter's handles, the database calls that run SQL, and `type` (a
+# connection built from its class would skip the checks' tracing).
 REACH = frozenset({*DENIED, *sys.stdlib_module_names, "bltns", "modules", "argv", "stdin", "stdout", "stderr",
                    "execute", "executemany", "executescript", "enable_load_extension", "create_function",
-                   "set_authorizer", "set_trace_callback", "set_progress_handler"})
+                   "set_authorizer", "set_trace_callback", "set_progress_handler", "type"})
 INTERNALS = ("spans", "logs", "gauges", "in_use", "opened", "now", "_idle", "_waiters", "_queue", "_connect")
 SQL = ("ATTACH", "DETACH", "VACUUM", "PRAGMA", "LOAD_EXTENSION")
 FORBIDDEN = re.compile(rf"\bimport\b|__|\b(?:{'|'.join(DENIED)})\b|(?i:\b(?:{'|'.join(SQL)})\b)")
@@ -268,8 +269,7 @@ def validate_patch(repo, case, decision, base, checks, runner):
         result["files"], result["changed_lines"] = check_patch(decision["patch"])
         with tempfile.TemporaryDirectory(dir=runner.root) as folder:
             clone = Path(folder) / "repo"
-            patch = decision["patch"] if decision["patch"].endswith("\n") else decision["patch"] + "\n"
-            patched = _apply(repo, base, patch, clone)
+            patched = _apply(repo, base, _with_git_headers(decision["patch"]), clone)
             _check_code(repo, base, clone, result["files"])
             result["applies"] = True
             result["own_tests"] = _own_tests(clone, runner)
@@ -280,6 +280,21 @@ def validate_patch(repo, case, decision, base, checks, runner):
         return result
     result["valid"] = verdict(result)
     return result
+
+
+def _with_git_headers(patch):
+    """*patch* ending in a newline, with a `diff --git` line before each file that lacks one: without it,
+    `git apply --recount` reads the next file's `--- a/` header as a removed line."""
+    lines = patch.removesuffix("\n").split("\n")
+    for i in reversed(range(len(lines))):
+        if lines[i].startswith("--- a/") and i + 1 < len(lines) and lines[i + 1].startswith("+++ b/"):
+            j = i
+            while j and lines[j - 1].startswith("index "):
+                j -= 1
+            if not (j and lines[j - 1].startswith("diff --git ")):
+                path = lines[i][len("--- a/"):]
+                lines.insert(j, f"diff --git a/{path} b/{path}")
+    return "\n".join(lines) + "\n"
 
 
 def verdict(result):

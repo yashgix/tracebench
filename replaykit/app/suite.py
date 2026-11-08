@@ -21,12 +21,13 @@ from .patch import GIT_ENV, REPLAY_KEYS, RESULT_KEYS, ROOT, _run, check_ids, che
     replay_result, validate_patch, verdict
 from .report import findings, summaries
 from .tools import CodeEvidence
+from .world import SERVICES
 
 SUITE_KEYS = ("id", "shop_commit", "seeds", "limits", "investigators", "cases")
 GIVEN = Path(__file__).resolve().parent / "investigator"
 COMMIT = re.compile(r"[0-9a-f]{40}")
 CASE_IDS = {spec["id"]: name for name, spec in CASES.items()}
-VALIDATION_KEYS = (*RESULT_KEYS, "patch_sha256")
+VALIDATION_KEYS = (*RESULT_KEYS, "inputs_sha256")
 RECORD_KEYS = ("decision", "outcome", "now", "turns", "tool_calls", "observed", "input_tokens", "output_tokens",
                "cost_microusd", "latency_ms", "transcript")
 
@@ -124,8 +125,20 @@ def _case_of(incident_id):
     return CASE_IDS[parts[1]], int(parts[2])
 
 
-def _patch_sha256(decision):
-    return hashlib.sha256(decision["patch"].encode()).hexdigest()
+def _inputs_sha256(incident_id, decision, deployed):
+    """What a validation ran on: the incident (so case and seed), the service, its deployed commit and the patch."""
+    inputs = {"incident": incident_id, "service": decision["service"], "base": deployed[decision["service"]],
+              "patch": decision["patch"]}
+    return hashlib.sha256(json.dumps(inputs, sort_keys=True).encode()).hexdigest()
+
+
+def _deployed(case_name):
+    """The commit each service runs at the page in case *case_name*: its baseline, then its deploys in order."""
+    spec = CASES[case_name]
+    deployed = dict.fromkeys(SERVICES, spec["baseline"])
+    for d in sorted(spec["deploys"], key=lambda d: d["at_ms"]):
+        deployed[d["service"]] = d["commit"]
+    return deployed
 
 
 def patches(report):
@@ -137,13 +150,14 @@ def patches(report):
 
 def validate_app(report, repo, runner):
     """Validate every patch in *report* (the verifier's) through *runner*: {incident id: {investigator: result}},
-    each result tied to its patch by hash."""
+    each result tied by hash to what it ran on."""
     validations = {}
     for incident_id, name, decision, deployed in patches(report):
         case_name, seed = _case_of(incident_id)
         result = validate_patch(repo, case(case_name, seed), decision, deployed[decision["service"]],
                                 CASES[case_name]["protected"], runner)
-        validations.setdefault(incident_id, {})[name] = {**result, "patch_sha256": _patch_sha256(decision)}
+        inputs = _inputs_sha256(incident_id, decision, deployed)
+        validations.setdefault(incident_id, {})[name] = {**result, "inputs_sha256": inputs}
     return validations
 
 
@@ -156,6 +170,8 @@ def _check_report(report):
     if [entry.get("id") if isinstance(entry, dict) else None for entry in report["incidents"]] != ids:
         raise ValueError(f"an investigation must hold exactly the incidents {ids}")
     for entry in report["incidents"]:
+        if entry.get("deployed") != _deployed(_case_of(entry["id"])[0]):
+            raise ValueError(f"incident {entry['id']} names other deployed commits than its case")
         results = entry.get("results")
         if not isinstance(results, dict) or set(results) != set(meta["investigators"]) or not all(
                 map(_complete, results.values())):
@@ -208,12 +224,15 @@ def _measured(decision):
         return [[], 0]
 
 
-def _check_validation(v, decision, case_name):
-    """Raise unless *v* is a complete validation of *decision*'s patch whose verdict agrees with its runs."""
+def _check_validation(v, incident_id, decision, deployed):
+    """Raise unless *v* is a complete validation of *decision*'s patch on its incident and deployed commit, and its
+    verdict agrees with its runs."""
+    case_name = _case_of(incident_id)[0]
     if not _shaped(v, check_ids(ROOT, CASES[case_name]["protected"])):
         raise ValueError("a validation does not have the shape of a patch validation")
-    if v["patch_sha256"] != _patch_sha256(decision) or [v["files"], v["changed_lines"]] != _measured(decision):
-        raise ValueError("a validation is not of its decision's patch")
+    if (v["inputs_sha256"] != _inputs_sha256(incident_id, decision, deployed)
+            or [v["files"], v["changed_lines"]] != _measured(decision)):
+        raise ValueError("a validation is not of its decision's patch on its incident")
     if v["valid"] != (verdict(v) and v["applies"] and v["error"] is None):
         raise ValueError("a validation's verdict does not match its runs")
 
@@ -225,8 +244,8 @@ def _check_validations(report, validations):
     given = {(incident_id, name) for incident_id, by_name in validations.items() for name in by_name}
     if given != {(incident_id, name) for incident_id, name, _, _ in expected}:
         raise ValueError(f"validations must cover exactly the {len(expected)} patch decisions")
-    for incident_id, name, decision, _ in expected:
-        _check_validation(validations[incident_id][name], decision, _case_of(incident_id)[0])
+    for incident_id, name, decision, deployed in expected:
+        _check_validation(validations[incident_id][name], incident_id, decision, deployed)
 
 
 def score_app_report(report, validations):

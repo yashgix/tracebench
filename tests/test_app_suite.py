@@ -113,12 +113,24 @@ class AppPipelineTest(unittest.TestCase):
                  "replay disagrees": lambda v: v[some_id]["fake-model"]["replay"].update(page=True,
                                                                                          pool_in_use_end=7),
                  "negative lines": lambda v: v[some_id]["fake-model"].update(changed_lines=-1),
-                 "another patch": lambda v: v[some_id]["fake-model"].update(patch_sha256="0" * 64),
+                 "another patch": lambda v: v[some_id]["fake-model"].update(inputs_sha256="0" * 64),
                  "other files": lambda v: v[some_id]["fake-model"].update(files=["shop/web.py"]),
                  "negative errors": lambda v: v[some_id]["fake-model"]["replay"].update(web_errors=-1)}
         for name, edit in tries.items():
             with self.subTest(name=name), self.assertRaises(ValueError):
                 score_app_report(self.report, changed(edit))
+
+    def test_a_validation_belongs_to_its_incident(self):
+        # As in Codex's control (chatgpt/94): a genuine validation moved, with its patch, to another incident whose
+        # case runs the same checks (c4 and c5 both run all four).
+        validations = copy.deepcopy(self.validations)
+        report = copy.deepcopy(self.report)
+        some_id, name, decision, _ = next(p for p in patches(report) if p[0] == "shop-app:c4:1")
+        other = next(e for e in report["incidents"] if e["id"] == "shop-app:c5:1")
+        other["results"][name]["decision"] = decision
+        validations[other["id"]] = {name: validations[some_id][name]}
+        with self.assertRaisesRegex(ValueError, "not of its decision's patch on its incident"):
+            score_app_report(report, validations)
 
     def test_the_investigation_must_cover_its_suite(self):
         def changed(edit):
@@ -131,7 +143,8 @@ class AppPipelineTest(unittest.TestCase):
                  "unknown id": lambda r: r["incidents"][0].update(id="shop-app:c9:1"),
                  "missing investigator": lambda r: r["incidents"][0]["results"].pop("fake-model"),
                  "missing record key": lambda r: r["incidents"][0]["results"]["fake-model"].pop("observed"),
-                 "decision not an object": lambda r: r["incidents"][0]["results"]["fake-model"].update(decision="x")}
+                 "decision not an object": lambda r: r["incidents"][0]["results"]["fake-model"].update(decision="x"),
+                 "another deployed commit": lambda r: r["incidents"][0]["deployed"].update(web=cases.GOOD)}
         for name, edit in tries.items():
             with self.subTest(name=name), self.assertRaises(ValueError):
                 score_app_report(changed(edit), self.validations)
