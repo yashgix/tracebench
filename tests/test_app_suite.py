@@ -144,7 +144,7 @@ class AppPipelineTest(unittest.TestCase):
                  "missing investigator": lambda r: r["incidents"][0]["results"].pop("fake-model"),
                  "missing record key": lambda r: r["incidents"][0]["results"]["fake-model"].pop("observed"),
                  "decision not an object": lambda r: r["incidents"][0]["results"]["fake-model"].update(decision="x"),
-                 "another deployed commit": lambda r: r["incidents"][0]["deployed"].update(web=cases.GOOD)}
+                 "another deployed commit": lambda r: r["incidents"][0]["deployed"].update(orders=cases.GOOD)}
         for name, edit in tries.items():
             with self.subTest(name=name), self.assertRaises(ValueError):
                 score_app_report(changed(edit), self.validations)
