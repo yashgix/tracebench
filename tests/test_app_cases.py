@@ -217,14 +217,20 @@ class CasePatchTest(unittest.TestCase):
     def test_a_stale_cache_is_caught(self):
         # Codex's (chatgpt/94): each entry dropped after one second, so reads seconds apart look fresh.
         expire = " " * 20 + "self.runtime.spawn(self.forget(sku.lower()))\n"
-        forget = ("    async def report_pool(self):\n", "    async def forget(self, key):\n        await self.runtime."
-                  "sleep(1000)\n        self.known.pop(key, None)\n\n    async def report_pool(self):\n")
+
+        def kept_for(ms):
+            return (*KNOWN, LOOKUP, CACHE_READ + expire + CACHE_ROWS, "    async def report_pool(self):\n",
+                    f"    async def forget(self, key):\n        await self.runtime.sleep({ms})\n"
+                    "        self.known.pop(key, None)\n\n    async def report_pool(self):\n")
 
         def as_asked(text):
             return text.replace("sku.lower()", "sku")
 
+        stored_late = (CACHE_READ.replace("self.known[sku.lower()] = await", "found = await") + " " * 20
+                       + "await self.runtime.sleep(10)\n" + " " * 20 + "self.known[sku.lower()] = found\n")
         tries = {"kept for ever": (*KNOWN, LOOKUP, CACHE_READ + CACHE_ROWS),
-                 "kept for a second": (*KNOWN, LOOKUP, CACHE_READ + expire + CACHE_ROWS, *forget),
+                 "kept for a second": kept_for(1000),
+                 "kept for 50 ms": kept_for(50),  # the reviewer agent's: gone before reads 60 ms later
                  # Codex's (chatgpt/96): kept under the code as asked, so `SKU-007` outlives a reservation of
                  # `sku-007`; dropped before the update, so a read overlapping the reservation keeps the old stock.
                  "kept under the code as asked": (*KNOWN, LOOKUP, as_asked(CACHE_READ + CACHE_ROWS),
@@ -232,9 +238,7 @@ class CasePatchTest(unittest.TestCase):
                  "dropped before the update": (*KNOWN, LOOKUP, CACHE_READ + CACHE_ROWS,
                                                RESERVE_READ, CACHE_DROP + RESERVE_READ),
                  # Read before the update, stored after the drop: caught only when no read filled the cache first.
-                 "stored late": (*KNOWN, LOOKUP, CACHE_READ.replace("self.known[sku.lower()] = await", "found = await")
-                                 + " " * 20 + "await self.runtime.sleep(10)\n" + " " * 20
-                                 + "self.known[sku.lower()] = found\n" + CACHE_ROWS, UPDATE, UPDATE + CACHE_DROP)}
+                 "stored late": (*KNOWN, LOOKUP, stored_late + CACHE_ROWS, UPDATE, UPDATE + CACHE_DROP)}
         for name, pairs in tries.items():
             with self.subTest(name=name):
                 failed = self.assertValid("slow_query", edit(cases.ANY_CASE, "shop/inventory.py", *pairs),

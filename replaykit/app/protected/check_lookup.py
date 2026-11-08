@@ -23,29 +23,37 @@ class LookupChecks(unittest.TestCase):
 
     def test_a_lookup_shows_a_reservation(self):
         # Read in one spelling or not at all, reserve, read in another at every offset into the reservation (that
-        # read may show either stock), then read in all three spellings: each must show the reservation.
+        # read may show either stock), then read in all three spellings right after it returns (or not, as that
+        # read can refill a cache) and 60 ms later: each must show the reservation.
         inventory, requests, allowed = self.app.inventory, [], {}
 
-        def call(key, values, at, method, *args):
+        def call(at, *steps):
+            """One request at *at* running (key, allowed values, method, *args) steps one after another."""
             async def run():
-                try:
-                    return key, await method(*args)
-                except ServiceError as error:
-                    return key, error.status
+                done = []
+                for key, _, method, *args in steps:
+                    try:
+                        done.append((key, await method(*args)))
+                    except ServiceError as error:
+                        done.append((key, error.status))
+                return done
             requests.append((at, run))
-            allowed[key] = values
+            allowed.update((key, values) for key, values, *_ in steps)
 
-        tries = itertools.product(range(-4, 12), (None, *SPELLINGS), SPELLINGS)
-        skus = (sku for sku, stock in CATALOGUE.items() if stock > 3)
-        for n, ((offset, first, during), sku) in enumerate(zip(tries, skus)):
-            start, stock, left = n * 100, CATALOGUE[sku], CATALOGUE[sku] - 3
+        def reads(n, when, sku, left):
+            return [((n, when, spell.__name__), {left}, inventory.stock, spell(sku)) for spell in SPELLINGS]
+
+        tries = itertools.product(range(-4, 9), (None, *SPELLINGS), SPELLINGS, (True, False))  # reserving takes 8 ms
+        skus = ((sku, stock) for sku, stock in CATALOGUE.items() if stock > 3)
+        for n, ((offset, first, during, at_once), (sku, stock)) in enumerate(zip(tries, skus)):
+            start, left = n * 100, stock - 3
             if first:
-                call((n, "first"), {stock}, start, inventory.stock, first(sku))
-            call((n, "reserve"), {left}, start + 20, inventory.reserve, sku, 3)
-            call((n, "during"), {stock, left}, start + 20 + offset, inventory.stock, during(sku))
-            for spell in SPELLINGS:
-                call((n, spell.__name__), {left}, start + 80, inventory.stock, spell(sku))
-        seen = dict(statuses(self.app, requests))
+                call(start, ((n, "first"), {stock}, inventory.stock, first(sku)))
+            after = reads(n, "after", sku, left) if at_once else []
+            call(start + 20, ((n, "reserve"), {left}, inventory.reserve, sku, 3), *after)
+            call(start + 20 + offset, ((n, "during"), {stock, left}, inventory.stock, during(sku)))
+            call(start + 80, *reads(n, "later", sku, left))
+        seen = dict(pair for done in statuses(self.app, requests) for pair in done)
         self.assertEqual(seen.keys(), allowed.keys())
         self.assertEqual({key: value for key, value in seen.items() if value not in allowed[key]}, {})
 
