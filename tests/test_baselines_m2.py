@@ -67,28 +67,21 @@ class NoDiagnosisTest(unittest.TestCase):
 
 class ThresholdTest(unittest.TestCase):
     def test_memory_threshold_is_inclusive(self):
-        diagnosis = TopologyAgent({}).observe(
-            [metric("db", "memory_mb", 900, id="ev-m")], 60
-        )
+        diagnosis = TopologyAgent({}).observe([metric("db", "memory_mb", 900, id="ev-m")], 60)
         self.assertEqual(
-            (diagnosis.service, diagnosis.fault_type, diagnosis.confidence,
-             diagnosis.evidence),
+            (diagnosis.service, diagnosis.fault_type, diagnosis.confidence, diagnosis.evidence),
             ("db", "memory_leak", 0.8, ("ev-m",)),
         )
 
     def test_latency_threshold_is_inclusive(self):
-        diagnosis = TopologyAgent({}).observe(
-            [metric("db", "latency_ms", 1500, id="ev-l")], 60
-        )
+        diagnosis = TopologyAgent({}).observe([metric("db", "latency_ms", 1500, id="ev-l")], 60)
         self.assertEqual(
             (diagnosis.service, diagnosis.fault_type, diagnosis.evidence),
             ("db", "dependency_timeout", ("ev-l",)),
         )
 
     def test_error_threshold_is_inclusive(self):
-        diagnosis = TopologyAgent({}).observe(
-            [metric("db", "error_rate", 0.2, id="ev-e")], 60
-        )
+        diagnosis = TopologyAgent({}).observe([metric("db", "error_rate", 0.2, id="ev-e")], 60)
         self.assertEqual(
             (diagnosis.service, diagnosis.fault_type, diagnosis.evidence),
             ("db", "config_error", ("ev-e",)),
@@ -119,9 +112,7 @@ class TypeTest(unittest.TestCase):
         self.assertEqual(diagnosis.evidence, ("ev-l", "ev-p"))
 
     def test_latency_without_pool_log_is_dependency_timeout(self):
-        diagnosis = TopologyAgent({}).observe(
-            [metric("db", "latency_ms", 2000, id="ev-l")], 60
-        )
+        diagnosis = TopologyAgent({}).observe([metric("db", "latency_ms", 2000, id="ev-l")], 60)
         self.assertEqual(
             (diagnosis.fault_type, diagnosis.evidence),
             ("dependency_timeout", ("ev-l",)),
@@ -137,9 +128,7 @@ class TypeTest(unittest.TestCase):
         self.assertEqual(diagnosis.evidence, ("ev-e", "ev-d"))
 
     def test_error_without_deploy_is_config_error(self):
-        diagnosis = TopologyAgent({}).observe(
-            [metric("db", "error_rate", 0.3, id="ev-e")], 60
-        )
+        diagnosis = TopologyAgent({}).observe([metric("db", "error_rate", 0.3, id="ev-e")], 60)
         self.assertEqual(
             (diagnosis.fault_type, diagnosis.evidence),
             ("config_error", ("ev-e",)),
@@ -204,17 +193,13 @@ class SelectionTest(unittest.TestCase):
             metric("api", "memory_mb", 950, id="ev-a"),
         ]
         diagnosis = TopologyAgent({}).observe(events, 60)
-        self.assertEqual(
-            (diagnosis.service, diagnosis.evidence), ("api", ("ev-a",))
-        )
+        self.assertEqual((diagnosis.service, diagnosis.evidence), ("api", ("ev-a",)))
 
 
 class StateTest(unittest.TestCase):
     def test_state_persists_across_calls(self):
         agent = TopologyAgent({"api": ["db"]})
-        self.assertIsNone(
-            agent.observe([metric("api", "error_rate", 0.1, t=60, id="ev-a1")], 60)
-        )
+        self.assertIsNone(agent.observe([metric("api", "error_rate", 0.1, t=60, id="ev-a1")], 60))
         diagnosis = agent.observe(
             [
                 metric("api", "error_rate", 0.3, t=120, id="ev-a2"),
@@ -222,29 +207,19 @@ class StateTest(unittest.TestCase):
             ],
             120,
         )
-        self.assertEqual(
-            (diagnosis.service, diagnosis.fault_type), ("db", "memory_leak")
-        )
+        self.assertEqual((diagnosis.service, diagnosis.fault_type), ("db", "memory_leak"))
 
     def test_newer_metric_replaces_the_value(self):
         agent = TopologyAgent({})
-        self.assertIsNone(
-            agent.observe([metric("db", "memory_mb", 500, t=60, id="ev-m1")], 60)
-        )
-        diagnosis = agent.observe(
-            [metric("db", "memory_mb", 950, t=120, id="ev-m2")], 120
-        )
+        self.assertIsNone(agent.observe([metric("db", "memory_mb", 500, t=60, id="ev-m1")], 60))
+        diagnosis = agent.observe([metric("db", "memory_mb", 950, t=120, id="ev-m2")], 120)
         self.assertEqual(diagnosis.evidence, ("ev-m2",))
 
     def test_older_metric_does_not_replace_the_latest(self):
         agent = TopologyAgent({})
         agent.observe([metric("db", "error_rate", 0.3, t=120, id="ev-new")], 120)
-        diagnosis = agent.observe(
-            [metric("db", "error_rate", 0.01, t=60, id="ev-old")], 180
-        )
-        self.assertEqual(
-            (diagnosis.service, diagnosis.evidence), ("db", ("ev-new",))
-        )
+        diagnosis = agent.observe([metric("db", "error_rate", 0.01, t=60, id="ev-old")], 180)
+        self.assertEqual((diagnosis.service, diagnosis.evidence), ("db", ("ev-new",)))
 
 
 class RegistryTest(unittest.TestCase):

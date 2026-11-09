@@ -11,9 +11,19 @@ SLOW_MS = 1000
 
 
 def _decision(act, service="-", fault_type="-", commit="-", file="-", evidence=(), patch=""):
-    return {"act": act, "calls": [], "service": service, "fault_type": fault_type, "commit": commit, "file": file,
-            "function": "-", "confidence": 50 if act in ("diagnose", "patch") else 0, "evidence": list(evidence),
-            "summary": "rule baseline", "patch": patch}
+    return {
+        "act": act,
+        "calls": [],
+        "service": service,
+        "fault_type": fault_type,
+        "commit": commit,
+        "file": file,
+        "function": "-",
+        "confidence": 50 if act in ("diagnose", "patch") else 0,
+        "evidence": list(evidence),
+        "summary": "rule baseline",
+        "patch": patch,
+    }
 
 
 def _signals(incident):
@@ -24,8 +34,11 @@ def _signals(incident):
         if event["kind"] == "log" and attrs["level"] in ("warn", "error"):
             kind = "limit" if "limit" in attrs["message"] else "error"
         elif event["kind"] == "metric" and attrs["value"]:
-            kind = {"http.server.error_rate": "error", "db.client.connections.pending_requests": "pool",
-                    "http.server.duration.p95": "slow" if attrs["value"] >= SLOW_MS else None}.get(attrs["name"])
+            kind = {
+                "http.server.error_rate": "error",
+                "db.client.connections.pending_requests": "pool",
+                "http.server.duration.p95": "slow" if attrs["value"] >= SLOW_MS else None,
+            }.get(attrs["name"])
         if kind is not None:
             ids, kinds = found[event["service"]]
             ids.append(event["id"])
@@ -43,8 +56,9 @@ def _fault_type(kinds):
 
 def _height(calls, service, seen=()):
     """The longest chain of calls from *service* down to a service that calls nothing (0 for that service)."""
-    return max((1 + _height(calls, callee, (*seen, service)) for callee in calls[service] if callee not in seen),
-               default=0)
+    return max(
+        (1 + _height(calls, callee, (*seen, service)) for callee in calls[service] if callee not in seen), default=0
+    )
 
 
 def _reverse(diff):
@@ -73,8 +87,15 @@ def revert_last_deploy(incident):
     last = max(deploys, key=lambda e: (e["t"], e["id"]))
     service, commit = last["service"], last["attrs"]["version"]
     ids, kinds = _signals(incident).get(service, ([], set()))
-    return _decision("patch", service, _fault_type(kinds), commit, incident.code["commits"][commit]["files"][0],
-                     [last["id"], *ids][:8], _reverse(incident.code["diffs"][commit]))
+    return _decision(
+        "patch",
+        service,
+        _fault_type(kinds),
+        commit,
+        incident.code["commits"][commit]["files"][0],
+        [last["id"], *ids][:8],
+        _reverse(incident.code["diffs"][commit]),
+    )
 
 
 def deepest_abnormal_commit(incident):
@@ -86,15 +107,20 @@ def deepest_abnormal_commit(incident):
     service = min(signals, key=lambda s: (_height(incident.calls, s), s))
     ids, kinds = signals[service]
     commit = incident.code["deployed"][service]
-    return _decision("diagnose", service, _fault_type(kinds), commit, incident.code["commits"][commit]["files"][0],
-                     ids[:8])
+    return _decision(
+        "diagnose", service, _fault_type(kinds), commit, incident.code["commits"][commit]["files"][0], ids[:8]
+    )
 
 
 def baseline_investigation(incident, name):
     """Rule *name*'s decision as an investigation that saw every event and all code in the bundle."""
     decision = {"deepest_abnormal_commit": deepest_abnormal_commit, "revert_last_deploy": revert_last_deploy}[name](
-        incident)
+        incident
+    )
     code = incident.code
-    observed = {e["id"] for e in incident.events} | set(code["commits"]) | {
-        f for c in code["commits"].values() for f in c["files"]}
+    observed = (
+        {e["id"] for e in incident.events}
+        | set(code["commits"])
+        | {f for c in code["commits"].values() for f in c["files"]}
+    )
     return Investigation(decision, "decided", incident.duration, 0, 0, frozenset(observed))

@@ -194,9 +194,7 @@ class RunTopologyTest(unittest.TestCase):
         result = report["incidents"][0]["results"]["topology"]
         self.assertTrue(result["root_cause_correct"])
         self.assertTrue(result["evidence_valid"])
-        row = next(
-            line for line in stdout.splitlines() if line.startswith("| topology |")
-        )
+        row = next(line for line in stdout.splitlines() if line.startswith("| topology |"))
         self.assertEqual(row, "| topology | 1 | 1.0 | 100.0 | 0.04 |")
 
 

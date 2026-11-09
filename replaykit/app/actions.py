@@ -3,8 +3,19 @@
 from ..model import _is_int
 from .patch import check_patch
 
-ACTION_KEYS = ("act", "calls", "service", "fault_type", "commit", "file", "function", "confidence", "evidence",
-               "summary", "patch")
+ACTION_KEYS = (
+    "act",
+    "calls",
+    "service",
+    "fault_type",
+    "commit",
+    "file",
+    "function",
+    "confidence",
+    "evidence",
+    "summary",
+    "patch",
+)
 CALL_KEYS = ("tool", "service", "arg")
 ACTS = ("call", "diagnose", "patch", "escalate", "dismiss")
 FAULT_TYPES = ("resource_leak", "config_error", "slow_query", "code_defect")
@@ -27,8 +38,11 @@ def _check_shape(action):
     if not isinstance(calls, list) or len(calls) > 3:
         raise ValueError("calls must be a list of at most 3 tool calls")
     for call in calls:
-        if not isinstance(call, dict) or set(call) != set(CALL_KEYS) or not all(isinstance(call[k], str)
-                                                                                 for k in CALL_KEYS):
+        if (
+            not isinstance(call, dict)
+            or set(call) != set(CALL_KEYS)
+            or not all(isinstance(call[k], str) for k in CALL_KEYS)
+        ):
             raise ValueError(f"a call must have exactly the string keys {list(CALL_KEYS)}")
 
 

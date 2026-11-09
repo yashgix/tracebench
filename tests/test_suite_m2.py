@@ -79,9 +79,7 @@ class LoadSuiteTest(unittest.TestCase):
     def test_returns_suite_scenario_and_hashes(self):
         path = self.write_suite()
         loaded = load_suite(path)
-        self.assertEqual(
-            set(loaded), {"suite", "scenario", "suite_sha256", "scenario_sha256"}
-        )
+        self.assertEqual(set(loaded), {"suite", "scenario", "suite_sha256", "scenario_sha256"})
         self.assertEqual(loaded["suite"], suite_body(sha256(self.scenario_path)))
         self.assertEqual(loaded["scenario"]["id"], "scn-suite")
         self.assertEqual(loaded["scenario"]["services"], ["api", "db"])
@@ -115,9 +113,7 @@ class LoadSuiteTest(unittest.TestCase):
     def test_rejects_bad_scenario_path(self):
         for value in ("", 3, ["scenario.json"]):
             with self.subTest(value=value):
-                self.assertInvalid(
-                    suite_body(sha256(self.scenario_path), scenario=value)
-                )
+                self.assertInvalid(suite_body(sha256(self.scenario_path), scenario=value))
 
     def test_rejects_absolute_scenario_path(self):
         suite = suite_body(sha256(self.scenario_path), scenario=self.scenario_path)
@@ -179,9 +175,7 @@ class LoadSuiteTest(unittest.TestCase):
         self.assertIn("missing.json", str(caught.exception))
 
     def test_rejects_changed_scenario(self):
-        path = write_json(
-            self.tmp.name, "suite.json", suite_body("0" * 64)
-        )
+        path = write_json(self.tmp.name, "suite.json", suite_body("0" * 64))
         with self.assertRaises(ValueError) as caught:
             load_suite(path)
         self.assertTrue(str(caught.exception).startswith("scenario changed"))
@@ -213,15 +207,11 @@ class RunPinnedTest(unittest.TestCase):
         cls.tmp = tempfile.TemporaryDirectory()
         cls.addClassCleanup(cls.tmp.cleanup)
         cls.scenario_path = write_json(cls.tmp.name, "scenario.json", SCENARIO)
-        cls.suite_path = write_json(
-            cls.tmp.name, "suite.json", suite_body(sha256(cls.scenario_path))
-        )
+        cls.suite_path = write_json(cls.tmp.name, "suite.json", suite_body(sha256(cls.scenario_path)))
         cls.report = run_pinned(cls.suite_path)
 
     def test_top_level_keys(self):
-        self.assertEqual(
-            set(self.report), {"agents", "incidents", "meta", "breakdown"}
-        )
+        self.assertEqual(set(self.report), {"agents", "incidents", "meta", "breakdown"})
         self.assertEqual(list(self.report["agents"]), ["last_deploy", "threshold"])
 
     def test_meta(self):
@@ -337,10 +327,7 @@ class RunPinnedTest(unittest.TestCase):
                 ["bad_deploy", "config_error", "pool_exhaustion"],
             )
             self.assertEqual(
-                sum(
-                    bucket["runs"]
-                    for bucket in data["by_fault_type"][agent].values()
-                ),
+                sum(bucket["runs"] for bucket in data["by_fault_type"][agent].values()),
                 6,
             )
             self.assertIn(agent, data["decoy_blamed"])

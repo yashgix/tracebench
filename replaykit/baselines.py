@@ -85,9 +85,7 @@ class TopologyAgent:
     """Diagnose the deepest anomalous service in the call graph."""
 
     def __init__(self, calls):
-        self._calls = {
-            caller: tuple(callees) for caller, callees in (calls or {}).items()
-        }
+        self._calls = {caller: tuple(callees) for caller, callees in (calls or {}).items()}
         self._metrics = {}  # service -> metric name -> (t, id, value)
         self._deploys = {}  # service -> (t, id)
         self._pool_logs = {}  # service -> (t, id)
@@ -116,16 +114,12 @@ class TopologyAgent:
                     if current is None or entry > current:
                         self._pool_logs[service] = entry
 
-        anomalous = {
-            service for service in self._metrics if self._is_anomalous(service)
-        }
+        anomalous = {service for service in self._metrics if self._is_anomalous(service)}
         if not anomalous:
             return None
 
         candidates = [
-            service
-            for service in anomalous
-            if not any(callee in anomalous for callee in self._calls.get(service, ()))
+            service for service in anomalous if not any(callee in anomalous for callee in self._calls.get(service, ()))
         ]
         if not candidates:
             candidates = list(anomalous)

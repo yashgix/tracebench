@@ -1,4 +1,5 @@
 """Command line interface for replaykit."""
+
 import argparse
 import json
 import os
@@ -62,10 +63,7 @@ def _parse_agents(text):
 
 
 def _agent_factories(names, calls):
-    return {
-        name: (lambda name=name: make_agent(name, calls))
-        for name in names
-    }
+    return {name: (lambda name=name: make_agent(name, calls)) for name in names}
 
 
 def _build_incidents(scenario, faults, seeds):
@@ -156,9 +154,7 @@ def _score_app_command(args):
 
 
 def _parser():
-    parser = _ArgumentParser(
-        prog="replaykit", description="Replay incidents against AI SRE agents."
-    )
+    parser = _ArgumentParser(prog="replaykit", description="Replay incidents against AI SRE agents.")
     commands = parser.add_subparsers(dest="command", required=True)
     run = commands.add_parser("run", help="run agents on a scenario")
     run.add_argument("--scenario", required=True, metavar="PATH")

@@ -208,17 +208,13 @@ class LoadScenarioTest(unittest.TestCase):
         self.assertInvalid(with_events(make_event(service="cache")))
 
     def test_event_duplicate_id(self):
-        self.assertInvalid(
-            with_events(make_event(id="ev-1", t=0), make_event(id="ev-1", t=60))
-        )
+        self.assertInvalid(with_events(make_event(id="ev-1", t=0), make_event(id="ev-1", t=60)))
 
     def test_attrs_must_be_object(self):
         self.assertInvalid(with_events(make_event(attrs=[])))
 
     def test_attrs_extra_key(self):
-        self.assertInvalid(
-            with_events(make_event(attrs={"name": "error_rate", "value": 0.1, "unit": "x"}))
-        )
+        self.assertInvalid(with_events(make_event(attrs={"name": "error_rate", "value": 0.1, "unit": "x"})))
 
     def test_attrs_missing_key(self):
         self.assertInvalid(with_events(make_event(attrs={"name": "error_rate"})))
@@ -231,25 +227,17 @@ class LoadScenarioTest(unittest.TestCase):
         self.assertInvalid(with_events(make_event(attrs={"name": "error_rate", "value": True})))
 
     def test_log_bad_level(self):
-        self.assertInvalid(
-            with_events(make_event(kind="log", attrs={"level": "debug", "message": "x"}))
-        )
+        self.assertInvalid(with_events(make_event(kind="log", attrs={"level": "debug", "message": "x"})))
 
     def test_log_bad_message(self):
-        self.assertInvalid(
-            with_events(make_event(kind="log", attrs={"level": "info", "message": 3}))
-        )
+        self.assertInvalid(with_events(make_event(kind="log", attrs={"level": "info", "message": 3})))
 
     def test_deploy_bad_version(self):
         self.assertInvalid(with_events(make_event(kind="deploy", attrs={"version": 1})))
 
     def test_alert_bad_rule_and_severity(self):
-        self.assertInvalid(
-            with_events(make_event(kind="alert", attrs={"rule": 1, "severity": "page"}))
-        )
-        self.assertInvalid(
-            with_events(make_event(kind="alert", attrs={"rule": "x", "severity": "urgent"}))
-        )
+        self.assertInvalid(with_events(make_event(kind="alert", attrs={"rule": 1, "severity": "page"})))
+        self.assertInvalid(with_events(make_event(kind="alert", attrs={"rule": "x", "severity": "urgent"})))
 
 
 class FaultTypesTest(unittest.TestCase):

@@ -55,9 +55,7 @@ class LastDeployAgentTest(unittest.TestCase):
         self.assertIsNone(agent.observe([], 120))
 
     def test_diagnoses_the_deploy(self):
-        diagnosis = LastDeployAgent().observe(
-            [deploy("db", t=120, id="ev-0007")], 120
-        )
+        diagnosis = LastDeployAgent().observe([deploy("db", t=120, id="ev-0007")], 120)
         self.assertEqual(diagnosis.service, "db")
         self.assertEqual(diagnosis.fault_type, "bad_deploy")
         self.assertEqual(diagnosis.confidence, 0.6)
@@ -103,9 +101,7 @@ class ThresholdAgentTest(unittest.TestCase):
         self.assertIsNone(ThresholdAgent().observe(events, 60))
 
     def test_memory_threshold_is_inclusive(self):
-        diagnosis = ThresholdAgent().observe(
-            [metric("db", "memory_mb", 900, id="ev-m1")], 60
-        )
+        diagnosis = ThresholdAgent().observe([metric("db", "memory_mb", 900, id="ev-m1")], 60)
         self.assertEqual(diagnosis.service, "db")
         self.assertEqual(diagnosis.fault_type, "memory_leak")
         self.assertEqual(diagnosis.confidence, 0.7)
@@ -145,9 +141,7 @@ class ThresholdAgentTest(unittest.TestCase):
         self.assertEqual(diagnosis.evidence, ("ev-l2",))
 
     def test_latency_threshold_is_inclusive(self):
-        diagnosis = ThresholdAgent().observe(
-            [metric("db", "latency_ms", 1500, id="ev-l1")], 60
-        )
+        diagnosis = ThresholdAgent().observe([metric("db", "latency_ms", 1500, id="ev-l1")], 60)
         self.assertEqual((diagnosis.service, diagnosis.evidence), ("db", ("ev-l1",)))
 
     def test_latency_ties_sort_by_service(self):
@@ -188,9 +182,7 @@ class ThresholdAgentTest(unittest.TestCase):
         )
 
     def test_error_threshold_without_deploy_is_config_error(self):
-        diagnosis = ThresholdAgent().observe(
-            [metric("db", "error_rate", 0.2, id="ev-e")], 60
-        )
+        diagnosis = ThresholdAgent().observe([metric("db", "error_rate", 0.2, id="ev-e")], 60)
         self.assertEqual(diagnosis.service, "db")
         self.assertEqual(diagnosis.fault_type, "config_error")
         self.assertEqual(diagnosis.confidence, 0.7)
@@ -212,9 +204,7 @@ class ThresholdAgentTest(unittest.TestCase):
     def test_deploy_for_another_service_does_not_change_type(self):
         agent = ThresholdAgent()
         self.assertIsNone(agent.observe([deploy("api", t=60, id="ev-d")], 60))
-        diagnosis = agent.observe(
-            [metric("db", "error_rate", 0.3, t=120, id="ev-e")], 120
-        )
+        diagnosis = agent.observe([metric("db", "error_rate", 0.3, t=120, id="ev-e")], 120)
         self.assertEqual(
             (diagnosis.service, diagnosis.fault_type, diagnosis.evidence),
             ("db", "config_error", ("ev-e",)),
@@ -245,16 +235,10 @@ class ThresholdAgentTest(unittest.TestCase):
 
     def test_latest_metric_value_and_id_are_used(self):
         agent = ThresholdAgent()
-        self.assertIsNone(
-            agent.observe([metric("db", "memory_mb", 500, t=60, id="ev-m1")], 60)
-        )
-        diagnosis = agent.observe(
-            [metric("db", "memory_mb", 950, t=120, id="ev-m2")], 120
-        )
+        self.assertIsNone(agent.observe([metric("db", "memory_mb", 500, t=60, id="ev-m1")], 60))
+        diagnosis = agent.observe([metric("db", "memory_mb", 950, t=120, id="ev-m2")], 120)
         self.assertEqual(diagnosis.evidence, ("ev-m2",))
-        self.assertIsNone(
-            agent.observe([metric("db", "memory_mb", 500, t=180, id="ev-m3")], 180)
-        )
+        self.assertIsNone(agent.observe([metric("db", "memory_mb", 500, t=180, id="ev-m3")], 180))
 
     def test_error_uses_highest_value_and_ties_sort_by_service(self):
         highest = ThresholdAgent().observe(

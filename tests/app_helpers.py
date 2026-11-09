@@ -40,8 +40,18 @@ def edit(commit, path, old, new, *more):
     return "".join(difflib.unified_diff(before.splitlines(True), after.splitlines(True), f"a/{path}", f"b/{path}"))
 
 
-EMPTY = {"calls": [], "service": "-", "fault_type": "-", "commit": "-", "file": "-", "function": "-",
-         "confidence": 0, "evidence": [], "summary": "checking", "patch": ""}
+EMPTY = {
+    "calls": [],
+    "service": "-",
+    "fault_type": "-",
+    "commit": "-",
+    "file": "-",
+    "function": "-",
+    "confidence": 0,
+    "evidence": [],
+    "summary": "checking",
+    "patch": "",
+}
 
 
 def calls(*triples):
@@ -50,13 +60,16 @@ def calls(*triples):
 
 def result(packet, tool):
     """The latest result of *tool* in the packet's history."""
-    return [r for entry in packet["history"] if entry["act"] == "call" for r in entry["results"]
-            if r["tool"] == tool][-1]
+    return [r for entry in packet["history"] if entry["act"] == "call" for r in entry["results"] if r["tool"] == tool][
+        -1
+    ]
 
 
 def scripted(*steps):
     """A model that answers turn n with steps[n-1](packet), or the action itself."""
+
     def model(incident_id, turn, packet):
         step = steps[turn - 1]
         return Reply("ok", step(packet) if callable(step) else step, 1000, 100, 10, 50)
+
     return model

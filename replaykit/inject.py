@@ -289,9 +289,7 @@ def _noise_entries(seed, scenario, fault, samples):
     decoy_service = None
     if decoy:
         decoy_service = rng.choice(others)
-        entries.append(
-            _event(max(0, start - 120), "deploy", decoy_service, {"version": _version(rng)})
-        )
+        entries.append(_event(max(0, start - 120), "deploy", decoy_service, {"version": _version(rng)}))
     for _ in range(flapping):
         rule = rng.choice(NOISE_RULES)
         service = rng.choice(others)

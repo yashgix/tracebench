@@ -11,41 +11,61 @@ ALL_CHECKS = ["check_inventory.py", "check_limits.py", "check_orders.py", "check
 
 
 def _patch(service, fault_type, commit, file, function=None):
-    return {"expected": "patch", "service": service, "fault_type": fault_type, "commit": commit, "file": file,
-            "function": function}
+    return {
+        "expected": "patch",
+        "service": service,
+        "fault_type": fault_type,
+        "commit": commit,
+        "file": file,
+        "function": function,
+    }
 
 
 CASES = {
     "leak": {
-        "id": "c1", "baseline": GOOD, "deploys": [{"at_ms": AT, "service": "inventory", "commit": LEAK}],
+        "id": "c1",
+        "baseline": GOOD,
+        "deploys": [{"at_ms": AT, "service": "inventory", "commit": LEAK}],
         "truth": _patch("inventory", "resource_leak", LEAK, "shop/inventory.py", "Inventory.reserve"),
         "protected": ["check_inventory.py"],
     },
     "config": {
-        "id": "c2", "baseline": LIMITER, "deploys": [{"at_ms": AT, "service": "web", "commit": PER_PRODUCT}],
+        "id": "c2",
+        "baseline": LIMITER,
+        "deploys": [{"at_ms": AT, "service": "web", "commit": PER_PRODUCT}],
         "truth": _patch("web", "config_error", PER_PRODUCT, "shop/config.py"),
         "protected": ["check_inventory.py", "check_limits.py"],
     },
     "decoy": {
-        "id": "c3", "baseline": PER_USER,
-        "deploys": [{"at_ms": AT, "service": "orders", "commit": ORDER_CAP},
-                    {"at_ms": AT + MINUTE + MINUTE // 2, "service": "web", "commit": LOG_WORDING}],
+        "id": "c3",
+        "baseline": PER_USER,
+        "deploys": [
+            {"at_ms": AT, "service": "orders", "commit": ORDER_CAP},
+            {"at_ms": AT + MINUTE + MINUTE // 2, "service": "web", "commit": LOG_WORDING},
+        ],
         "truth": _patch("orders", "code_defect", ORDER_CAP, "shop/orders.py", "Orders.place"),
         "protected": ["check_inventory.py", "check_limits.py", "check_orders.py"],
     },
     "slow_query": {
-        "id": "c4", "baseline": QUERY_HELPER, "catalogue": 6000,
+        "id": "c4",
+        "baseline": QUERY_HELPER,
+        "catalogue": 6000,
         "deploys": [{"at_ms": AT, "service": "inventory", "commit": ANY_CASE}],
         "truth": _patch("inventory", "slow_query", ANY_CASE, "shop/inventory.py", "Inventory.stock"),
         "protected": ALL_CHECKS,
     },
     "outside_lock": {
-        "id": "c5", "baseline": LOWER_CASED, "deploys": [], "db_lock": {"at_ms": AT},
+        "id": "c5",
+        "baseline": LOWER_CASED,
+        "deploys": [],
+        "db_lock": {"at_ms": AT},
         "truth": {"expected": "escalate"},
         "protected": ALL_CHECKS,
     },
     "load_test": {
-        "id": "c6", "baseline": LOWER_CASED, "deploys": [],
+        "id": "c6",
+        "baseline": LOWER_CASED,
+        "deploys": [],
         "load_test": {"user": "perf-loadtest", "sku": "sku-000", "start_ms": AT, "end_ms": AT + 110_000, "per_s": 100},
         "truth": {"expected": "dismiss"},
         "protected": ALL_CHECKS,
@@ -56,5 +76,7 @@ TRUSTED = ("truth", "protected")
 
 def case(name, seed):
     """The run description of case *name* at *seed*, without its truth or protected checks."""
-    return {key: value for key, value in CASES[name].items() if key not in TRUSTED} | {"seed": seed,
-                                                                                         "duration_ms": DURATION}
+    return {key: value for key, value in CASES[name].items() if key not in TRUSTED} | {
+        "seed": seed,
+        "duration_ms": DURATION,
+    }

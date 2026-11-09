@@ -7,8 +7,13 @@ from ..tools import LAST, Evidence
 from ..tools import TOOLS as TELEMETRY_TOOLS
 
 TOOLS = (*TELEMETRY_TOOLS, "traces", "commits", "diff", "source", "search")
-METRICS = ("http.server.request.count", "http.server.error_rate", "http.server.duration.p95",
-           "db.client.connections.usage", "db.client.connections.pending_requests")
+METRICS = (
+    "http.server.request.count",
+    "http.server.error_rate",
+    "http.server.duration.p95",
+    "db.client.connections.usage",
+    "db.client.connections.pending_requests",
+)
 TRACES, DIFF_LINES, SOURCE_LINES, HITS, TEXT = 5, 200, 80, 20, 200
 RANGE = re.compile(r"([\w./-]+?)(?::(\d+)-(\d+))?")
 
@@ -23,8 +28,14 @@ class CodeEvidence(Evidence):
 
     @staticmethod
     def _log_row(event):
-        return [event["id"], event["t"], event["service"], event["attrs"]["level"], event["attrs"]["message"],
-                event["attrs"]["trace_id"]]
+        return [
+            event["id"],
+            event["t"],
+            event["service"],
+            event["attrs"]["level"],
+            event["attrs"]["message"],
+            event["attrs"]["trace_id"],
+        ]
 
     def _dispatch(self, tool, call):
         service, arg = call["service"], call["arg"]
@@ -57,9 +68,17 @@ class CodeEvidence(Evidence):
 
     @staticmethod
     def _span_row(span):
-        return [span["span_id"], span["parent_span_id"], span["service"], span["name"], span["kind"],
-                span["start_ms"], span["end_ms"] - span["start_ms"], span["status"],
-                span["attributes"].get("http.status_code")]
+        return [
+            span["span_id"],
+            span["parent_span_id"],
+            span["service"],
+            span["name"],
+            span["kind"],
+            span["start_ms"],
+            span["end_ms"] - span["start_ms"],
+            span["status"],
+            span["attributes"].get("http.status_code"),
+        ]
 
     def _commits(self, service):
         deployed = self._code["deployed"][service]
@@ -74,8 +93,12 @@ class CodeEvidence(Evidence):
         if short not in self._code["diffs"]:
             raise ValueError(f"unknown commit {short!r}")
         lines = self._code["diffs"][short].splitlines()
-        result = {"tool": "diff", "commit": self._commit_row(short), "truncated": len(lines) > DIFF_LINES,
-                  "diff": [line[:TEXT] for line in lines[:DIFF_LINES]]}
+        result = {
+            "tool": "diff",
+            "commit": self._commit_row(short),
+            "truncated": len(lines) > DIFF_LINES,
+            "diff": [line[:TEXT] for line in lines[:DIFF_LINES]],
+        }
         return result, [short, *self._code["commits"][short]["files"]]
 
     def _tree(self, service):
@@ -101,9 +124,19 @@ class CodeEvidence(Evidence):
         if not 2 <= len(pattern) <= 80:
             raise ValueError("search needs a fixed string of 2 to 80 characters")
         commit, tree = self._tree(service)
-        hits = [[path, n, line[:TEXT]] for path in sorted(tree)
-                for n, line in enumerate(tree[path].splitlines(), 1) if pattern in line]
+        hits = [
+            [path, n, line[:TEXT]]
+            for path in sorted(tree)
+            for n, line in enumerate(tree[path].splitlines(), 1)
+            if pattern in line
+        ]
         shown = hits[:HITS]
-        result = {"tool": "search", "service": service, "commit": commit, "pattern": pattern,
-                  "hits": shown, "truncated": len(hits) > HITS}
+        result = {
+            "tool": "search",
+            "service": service,
+            "commit": commit,
+            "pattern": pattern,
+            "hits": shown,
+            "truncated": len(hits) > HITS,
+        }
         return result, sorted({hit[0] for hit in shown})

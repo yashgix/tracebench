@@ -24,16 +24,26 @@ class AppIncident:
 
 def _events(raw, end):
     rows = [(d["time_ms"], "deploy", d["service"], {"version": d["commit"]}) for d in raw["deploys"]]
-    rows += [(m["time_ms"], "metric", m["service"], {"name": m["name"], "value": m["value"]})
-             for m in raw["metrics"] + raw["gauges"]]
-    rows += [(log["time_ms"], "log", log["service"],
-              {"level": LEVELS[log["severity"]], "message": log["body"], "trace_id": log["trace_id"]})
-             for log in raw["logs"]]
+    rows += [
+        (m["time_ms"], "metric", m["service"], {"name": m["name"], "value": m["value"]})
+        for m in raw["metrics"] + raw["gauges"]
+    ]
+    rows += [
+        (
+            log["time_ms"],
+            "log",
+            log["service"],
+            {"level": LEVELS[log["severity"]], "message": log["body"], "trace_id": log["trace_id"]},
+        )
+        for log in raw["logs"]
+    ]
     page = raw["page"]
     rows.append((page["time_ms"], "alert", page["service"], {"rule": page["rule"], "severity": page["severity"]}))
     rows = sorted((row for row in rows if row[0] <= end), key=lambda r: (*r[:3], json.dumps(r[3], sort_keys=True)))
-    return [{"id": f"ev-{i:04d}", "t": t, "kind": kind, "service": service, "attrs": attrs}
-            for i, (t, kind, service, attrs) in enumerate(rows, 1)]
+    return [
+        {"id": f"ev-{i:04d}", "t": t, "kind": kind, "service": service, "attrs": attrs}
+        for i, (t, kind, service, attrs) in enumerate(rows, 1)
+    ]
 
 
 def _calls(spans):
@@ -45,15 +55,26 @@ def _calls(spans):
 
 
 def _git(repo, *args):
-    return subprocess.run(["git", "--git-dir", str(Path(repo) / ".git"), *args], capture_output=True, check=True,
-                          text=True).stdout
+    return subprocess.run(
+        ["git", "--git-dir", str(Path(repo) / ".git"), *args], capture_output=True, check=True, text=True
+    ).stdout
 
 
 def _commit(repo, full):
     when, author, message = _git(repo, "show", "-s", "--format=%aI%x00%an%x00%s", full).rstrip("\n").split("\0")
     files = _git(repo, "diff-tree", "--no-commit-id", "--name-only", "-r", "--root", full).splitlines()
-    diff = _git(repo, "diff-tree", "-p", "--root", "--no-renames", "--no-color", "--no-ext-diff", "--no-textconv",
-                "--no-commit-id", full)
+    diff = _git(
+        repo,
+        "diff-tree",
+        "-p",
+        "--root",
+        "--no-renames",
+        "--no-color",
+        "--no-ext-diff",
+        "--no-textconv",
+        "--no-commit-id",
+        full,
+    )
     return {"hash": full[:7], "time": when, "author": author, "message": message, "files": files}, diff
 
 
@@ -80,6 +101,12 @@ def bundle(repo, case, raw):
         raise ValueError(f"case {case['id']} seed {case['seed']} never pages")
     end = page["time_ms"]
     spans = [span for span in raw["spans"] if span["end_ms"] <= end]
-    return AppIncident(id=f"shop-app:{case['id']}:{case['seed']}", services=list(world.SERVICES),
-                       calls=_calls(spans), duration=end, events=_events(raw, end), spans=spans,
-                       code=_code(repo, raw["deploys"], end))
+    return AppIncident(
+        id=f"shop-app:{case['id']}:{case['seed']}",
+        services=list(world.SERVICES),
+        calls=_calls(spans),
+        duration=end,
+        events=_events(raw, end),
+        spans=spans,
+        code=_code(repo, raw["deploys"], end),
+    )

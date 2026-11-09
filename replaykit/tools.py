@@ -78,8 +78,10 @@ class Evidence:
 
     def _listing(self, tool, service, level):
         if tool == "alerts":
-            rows = [[e["id"], e["t"], e["service"], e["attrs"]["rule"], e["attrs"]["severity"]]
-                    for e in self._of("alert", service)][-LAST:]
+            rows = [
+                [e["id"], e["t"], e["service"], e["attrs"]["rule"], e["attrs"]["severity"]]
+                for e in self._of("alert", service)
+            ][-LAST:]
             return {"tool": tool, "service": service, "alerts": rows}, [row[0] for row in rows]
         if tool == "deploys":
             rows = [[e["id"], e["t"], e["service"], e["attrs"]["version"]] for e in self._of("deploy", service)]

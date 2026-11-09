@@ -110,9 +110,7 @@ class BreakdownTest(unittest.TestCase):
         )
 
     def test_fault_types_follow_fault_types_order_and_skip_absent_ones(self):
-        self.assertEqual(
-            list(self.data["by_fault_type"]["alpha"]), ["bad_deploy", "memory_leak"]
-        )
+        self.assertEqual(list(self.data["by_fault_type"]["alpha"]), ["bad_deploy", "memory_leak"])
 
     def test_confusion(self):
         self.assertEqual(
@@ -175,34 +173,37 @@ class AgentsTableTest(unittest.TestCase):
 
 class RenderMarkdownTest(unittest.TestCase):
     def test_full_report(self):
-        expected = "\n\n".join(
-            [
-                "# Suite demo-v1",
-                "suite `aaaaaaaaaaaa` \u00b7 scenario scn `0123456789ab` "
-                "\u00b7 replaykit 0.2.0 \u00b7 seeds 1, 2 \u00b7 step 60",
-                "## Agents\n\n"
-                "| agent | runs | root cause accuracy | mean points | brier |\n"
-                "| --- | --- | --- | --- | --- |\n"
-                "| alpha | 3 | 0.6667 | 63.33 | 0.25 |\n"
-                "| beta | 3 | 0.3333 | 30.0 | 0.4123 |",
-                "## Accuracy by fault type\n\n"
-                "| agent | bad_deploy | memory_leak |\n"
-                "| --- | --- | --- |\n"
-                "| alpha | 2/2 | 0/1 |\n"
-                "| beta | 0/2 | 1/1 |",
-                "## Misdiagnoses\n\n"
-                "| agent | truth | diagnosed | runs |\n"
-                "| --- | --- | --- | --- |\n"
-                "| alpha | memory_leak | none | 1 |\n"
-                "| beta | bad_deploy | config_error | 1 |\n"
-                "| beta | bad_deploy | none | 1 |",
-                "## Decoys and noise\n\n"
-                "| agent | decoy blamed | noise cited |\n"
-                "| --- | --- | --- |\n"
-                "| alpha | 0 | 0 |\n"
-                "| beta | 1 | 3 |",
-            ]
-        ) + "\n"
+        expected = (
+            "\n\n".join(
+                [
+                    "# Suite demo-v1",
+                    "suite `aaaaaaaaaaaa` \u00b7 scenario scn `0123456789ab` "
+                    "\u00b7 replaykit 0.2.0 \u00b7 seeds 1, 2 \u00b7 step 60",
+                    "## Agents\n\n"
+                    "| agent | runs | root cause accuracy | mean points | brier |\n"
+                    "| --- | --- | --- | --- | --- |\n"
+                    "| alpha | 3 | 0.6667 | 63.33 | 0.25 |\n"
+                    "| beta | 3 | 0.3333 | 30.0 | 0.4123 |",
+                    "## Accuracy by fault type\n\n"
+                    "| agent | bad_deploy | memory_leak |\n"
+                    "| --- | --- | --- |\n"
+                    "| alpha | 2/2 | 0/1 |\n"
+                    "| beta | 0/2 | 1/1 |",
+                    "## Misdiagnoses\n\n"
+                    "| agent | truth | diagnosed | runs |\n"
+                    "| --- | --- | --- | --- |\n"
+                    "| alpha | memory_leak | none | 1 |\n"
+                    "| beta | bad_deploy | config_error | 1 |\n"
+                    "| beta | bad_deploy | none | 1 |",
+                    "## Decoys and noise\n\n"
+                    "| agent | decoy blamed | noise cited |\n"
+                    "| --- | --- | --- |\n"
+                    "| alpha | 0 | 0 |\n"
+                    "| beta | 1 | 3 |",
+                ]
+            )
+            + "\n"
+        )
         self.assertEqual(render_markdown(make_report()), expected)
 
     def test_section_order(self):
@@ -225,11 +226,7 @@ class RenderMarkdownTest(unittest.TestCase):
     def test_brier_none_prints_a_dash(self):
         report = make_report()
         report["agents"]["beta"]["brier"] = None
-        row = next(
-            line
-            for line in render_markdown(report).splitlines()
-            if line.startswith("| beta |")
-        )
+        row = next(line for line in render_markdown(report).splitlines() if line.startswith("| beta |"))
         self.assertTrue(row.endswith("| - |"))
 
     def test_no_misdiagnoses_prints_none(self):

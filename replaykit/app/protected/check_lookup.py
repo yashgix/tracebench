@@ -44,6 +44,7 @@ class LookupChecks(unittest.TestCase):
             async def run():
                 await ask(*step)
                 done.resolve()
+
             runtime.spawn(run(), at=at)
             return done
 
@@ -58,8 +59,9 @@ class LookupChecks(unittest.TestCase):
             if first:
                 await ask((n, "first"), {stock}, inventory.stock, first(sku))
             now = runtime.now
-            reserving = [start(now + 4 + gap, (n, "reserve", i), left, inventory.reserve, sku, 3)
-                         for i, gap in enumerate(gaps)]
+            reserving = [
+                start(now + 4 + gap, (n, "reserve", i), left, inventory.reserve, sku, 3) for i, gap in enumerate(gaps)
+            ]
             reading = start(now + offset, (n, "during"), {stock} | left, inventory.stock, during(sku))
             for done in reserving:
                 await done
@@ -113,19 +115,26 @@ class LookupChecks(unittest.TestCase):
                         return await app.inventory.stock(sku)
                     except ServiceError as error:  # what it answers is for the other checks
                         return error.status
+
                 return run
 
             skus = ("sku-5999", "sku-4242", "Sku-4321", "sku-9999")  # the last one is not in the catalogue
             self.assertEqual(len(statuses(app, [(i * 10_000, lookup(sku)) for i, sku in enumerate(skus)])), 4)
             trusted = own()
-        plans = [row[3] for sql in ran if not sql.startswith("EXPLAIN")
-                 for row in trusted.execute("EXPLAIN QUERY PLAN " + sql)]
+        plans = [
+            row[3]
+            for sql in ran
+            if not sql.startswith("EXPLAIN")
+            for row in trusted.execute("EXPLAIN QUERY PLAN " + sql)
+        ]
         # Any table name counts: an alias (`items AS i`) shows up as `SCAN i`.
         self.assertEqual({plan.split()[0] for plan in plans} & {"SEARCH", "SCAN"}, {"SEARCH"}, plans)
         # A lookup through the index takes tens of steps; walking the catalogue takes over 30,000.
         bounds = [0, *starts[1:], len(ran)]
-        spent = [sum(n for sql, n in zip(ran[a:b], work[a:b]) if i or not INDEX.match(sql))
-                 for i, (a, b) in enumerate(zip(bounds, bounds[1:]))]
+        spent = [
+            sum(n for sql, n in zip(ran[a:b], work[a:b]) if i or not INDEX.match(sql))
+            for i, (a, b) in enumerate(zip(bounds, bounds[1:]))
+        ]
         self.assertLessEqual(max(spent), STEP_BUDGET, (spent, plans))
 
     def test_an_unknown_product_is_not_found(self):

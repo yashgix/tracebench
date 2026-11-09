@@ -67,18 +67,14 @@ class CliTest(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertEqual(err, "")
         lines = out.strip().splitlines()
-        self.assertEqual(
-            lines[0], "| agent | runs | root cause accuracy | mean points | brier |"
-        )
+        self.assertEqual(lines[0], "| agent | runs | root cause accuracy | mean points | brier |")
         self.assertEqual(lines[1], "| --- | --- | --- | --- | --- |")
         names = [line.split("|")[1].strip() for line in lines[2:]]
         self.assertEqual(names, ["last_deploy", "threshold"])
 
     def test_brier_none_prints_dash(self):
         faults = self._write_json("config.json", [fault("config_error")])
-        code, out, err = self._run(
-            *self._args(**{"--faults": faults, "--agents": "last_deploy"})
-        )
+        code, out, err = self._run(*self._args(**{"--faults": faults, "--agents": "last_deploy"}))
         self.assertEqual(code, 0)
         self.assertEqual(err, "")
         row = out.strip().splitlines()[2]
@@ -102,9 +98,7 @@ class CliTest(unittest.TestCase):
             [fault("bad_deploy", "db", 120), fault("config_error", "api", 60)],
         )
         out_path = self._path("ordered-report.json")
-        code, _, err = self._run(
-            *self._args(**{"--faults": faults, "--seeds": "1,2", "--out": out_path})
-        )
+        code, _, err = self._run(*self._args(**{"--faults": faults, "--seeds": "1,2", "--out": out_path}))
         self.assertEqual(code, 0)
         self.assertEqual(err, "")
         with open(out_path, encoding="utf-8") as handle:
@@ -128,9 +122,7 @@ class CliTest(unittest.TestCase):
         self.assertIn("missing.json", err)
 
     def test_unknown_agent_is_an_error(self):
-        code, out, err = self._run(
-            *self._args(**{"--agents": "last_deploy,oracle"})
-        )
+        code, out, err = self._run(*self._args(**{"--agents": "last_deploy,oracle"}))
         self.assertEqual(code, 2)
         self.assertEqual(out, "")
         self.assertIn("unknown agent 'oracle'", err)

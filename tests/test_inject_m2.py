@@ -28,10 +28,7 @@ def fault(**overrides):
 
 def events_of(incident, kind, service=None):
     return [
-        event
-        for event in incident.events
-        if event['kind'] == kind
-        and (service is None or event['service'] == service)
+        event for event in incident.events if event['kind'] == kind and (service is None or event['service'] == service)
     ]
 
 
@@ -39,18 +36,12 @@ def metric_map(incident, service, name):
     return {
         event['t']: event['attrs']['value']
         for event in incident.events
-        if event['kind'] == 'metric'
-        and event['service'] == service
-        and event['attrs']['name'] == name
+        if event['kind'] == 'metric' and event['service'] == service and event['attrs']['name'] == name
     }
 
 
 def logs(incident, service, message):
-    return [
-        event
-        for event in events_of(incident, 'log', service)
-        if event['attrs']['message'] == message
-    ]
+    return [event for event in events_of(incident, 'log', service) if event['attrs']['message'] == message]
 
 
 def alerts(incident, service):
@@ -71,11 +62,7 @@ def shape(event):
 
 
 def non_noise_shapes(incident):
-    return [
-        shape(event)
-        for event in incident.events
-        if event['id'] not in incident.truth.noise_ids
-    ]
+    return [shape(event) for event in incident.events if event['id'] not in incident.truth.noise_ids]
 
 
 class PoolExhaustionTest(unittest.TestCase):
@@ -348,11 +335,7 @@ class NoiseFlappingTest(unittest.TestCase):
             ),
             4,
         )
-        ticket = [
-            event
-            for event in events_of(incident, 'alert')
-            if event['attrs']['severity'] == 'ticket'
-        ]
+        ticket = [event for event in events_of(incident, 'alert') if event['attrs']['severity'] == 'ticket']
         self.assertEqual(len(ticket), 5)
         self.assertEqual(len(incident.truth.noise_ids), 5)
         samples = set(range(0, 601, 60))

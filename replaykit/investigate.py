@@ -122,16 +122,26 @@ class _Run:
         self.tokens_out += reply.output_tokens
         self.cost += reply.cost_microusd
         self.latency += reply.latency_ms
-        self.transcript.append({
-            "turn": self.turns, "packet_sha256": digest, "kind": reply.kind, "action": reply.action,
-            "input_tokens": reply.input_tokens, "output_tokens": reply.output_tokens,
-            "cost_microusd": reply.cost_microusd, "latency_ms": reply.latency_ms,
-        })
+        self.transcript.append(
+            {
+                "turn": self.turns,
+                "packet_sha256": digest,
+                "kind": reply.kind,
+                "action": reply.action,
+                "input_tokens": reply.input_tokens,
+                "output_tokens": reply.output_tokens,
+                "cost_microusd": reply.cost_microusd,
+                "latency_ms": reply.latency_ms,
+            }
+        )
         return reply
 
     def note(self, entry):
-        entry.update(turn=self.turns, turns_left=self.limits.turns - self.turns,
-                     tool_calls_left=self.limits.tool_calls - self.tool_calls)
+        entry.update(
+            turn=self.turns,
+            turns_left=self.limits.turns - self.turns,
+            tool_calls_left=self.limits.tool_calls - self.tool_calls,
+        )
         self.history.append(entry)
 
     def run_calls(self, calls):
@@ -146,8 +156,17 @@ class _Run:
 
     def finish(self, decision, outcome):
         return Investigation(
-            decision, outcome, self.evidence.now, self.turns, self.tool_calls, frozenset(self.evidence.observed),
-            self.tokens_in, self.tokens_out, self.cost, self.latency, self.transcript,
+            decision,
+            outcome,
+            self.evidence.now,
+            self.turns,
+            self.tool_calls,
+            frozenset(self.evidence.observed),
+            self.tokens_in,
+            self.tokens_out,
+            self.cost,
+            self.latency,
+            self.transcript,
         )
 
 
@@ -182,10 +201,23 @@ def baseline_investigation(incident, name):
     events = [dict(event) for event in incident.events if event["t"] <= evidence.now]
     diagnosis = make_agent(name, incident.calls).observe(events, evidence.now)
     if diagnosis is None:
-        decision = {"act": "dismiss", "calls": [], "service": "-", "fault_type": "-", "confidence": 0,
-                    "evidence": [], "summary": "baseline"}
+        decision = {
+            "act": "dismiss",
+            "calls": [],
+            "service": "-",
+            "fault_type": "-",
+            "confidence": 0,
+            "evidence": [],
+            "summary": "baseline",
+        }
     else:
-        decision = {"act": "diagnose", "calls": [], "service": diagnosis.service,
-                    "fault_type": diagnosis.fault_type, "confidence": round(diagnosis.confidence * 100),
-                    "evidence": list(diagnosis.evidence), "summary": "baseline"}
+        decision = {
+            "act": "diagnose",
+            "calls": [],
+            "service": diagnosis.service,
+            "fault_type": diagnosis.fault_type,
+            "confidence": round(diagnosis.confidence * 100),
+            "evidence": list(diagnosis.evidence),
+            "summary": "baseline",
+        }
     return Investigation(decision, "decided", evidence.now, 0, 0, frozenset(e["id"] for e in events))

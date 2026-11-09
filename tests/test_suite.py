@@ -109,9 +109,7 @@ class ShapeTest(unittest.TestCase):
         first = make_incident(seed=1)
         second = make_incident(seed=2)
         report = run_suite([second, first], {"only": lambda: NoDiagnosisAgent()})
-        self.assertEqual(
-            [entry["id"] for entry in report["incidents"]], [second.id, first.id]
-        )
+        self.assertEqual([entry["id"] for entry in report["incidents"]], [second.id, first.id])
 
 
 class FactoryTest(unittest.TestCase):
@@ -137,12 +135,8 @@ class AggregateTest(unittest.TestCase):
         report = run_suite(
             [incident],
             {
-                "perfect": lambda: FixedAgent(
-                    Diagnosis("db", "bad_deploy", 0.8, (evidence,)), 240
-                ),
-                "wrong": lambda: FixedAgent(
-                    Diagnosis("api", "config_error", 0.5, (evidence,)), 240
-                ),
+                "perfect": lambda: FixedAgent(Diagnosis("db", "bad_deploy", 0.8, (evidence,)), 240),
+                "wrong": lambda: FixedAgent(Diagnosis("api", "config_error", 0.5, (evidence,)), 240),
                 "silent": lambda: NoDiagnosisAgent(),
             },
         )

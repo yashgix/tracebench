@@ -79,9 +79,7 @@ class ShapeTest(unittest.TestCase):
 class PerfectTest(unittest.TestCase):
     def setUp(self):
         self.incident = make_incident()
-        self.run = make_run(
-            self.incident, at=240, evidence=event_ids(self.incident, injected=True, before=240)
-        )
+        self.run = make_run(self.incident, at=240, evidence=event_ids(self.incident, injected=True, before=240))
         self.result = score(self.incident, self.run)
 
     def test_flags(self):
@@ -112,9 +110,7 @@ class PointsTest(unittest.TestCase):
         self.assertEqual(result["points"], 30.0)
 
     def test_wrong_type(self):
-        result = score(
-            self.incident, make_run(self.incident, fault_type="config_error", evidence=self.evidence)
-        )
+        result = score(self.incident, make_run(self.incident, fault_type="config_error", evidence=self.evidence))
         self.assertEqual(result["points"], 50.0)
 
     def test_negative_delay_scores_zero_timeliness(self):

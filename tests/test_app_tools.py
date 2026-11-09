@@ -32,8 +32,9 @@ class BundleTest(unittest.TestCase):
         self.assertEqual(len(ids), len(set(ids)))
 
     def test_topology_comes_from_traces(self):
-        self.assertEqual(self.incident.calls, {"web": ["inventory", "orders"], "orders": ["inventory"],
-                                               "inventory": []})
+        self.assertEqual(
+            self.incident.calls, {"web": ["inventory", "orders"], "orders": ["inventory"], "inventory": []}
+        )
 
     def test_same_case_same_bundle(self):
         run = cases.case("leak", 1)
@@ -43,8 +44,13 @@ class BundleTest(unittest.TestCase):
     def test_no_truth_fix_or_protected_check_in_the_bundle(self):
         text = json.dumps(self.incident.__dict__)
         truth = cases.CASES["leak"]["truth"]
-        for secret in (truth["fault_type"], truth["function"], "protected", "check_inventory",
-                       "test_many_conflicts_leave_the_pool_usable"):
+        for secret in (
+            truth["fault_type"],
+            truth["function"],
+            "protected",
+            "check_inventory",
+            "test_many_conflicts_leave_the_pool_usable",
+        ):
             self.assertNotIn(secret, text)
 
     def test_a_deploy_after_the_page_is_out_of_reach(self):
@@ -56,8 +62,12 @@ class BundleTest(unittest.TestCase):
         self.assertEqual(json.dumps(incident.__dict__), json.dumps(self.incident.__dict__))
 
     def test_later_commits_are_out_of_reach(self):
-        listing = subprocess.run(["git", "--git-dir", str(REPO / ".git"), "rev-list", f"{cases.LEAK}..main"],
-                                 capture_output=True, text=True, check=True).stdout.split()
+        listing = subprocess.run(
+            ["git", "--git-dir", str(REPO / ".git"), "rev-list", f"{cases.LEAK}..main"],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.split()
         later, dump = [full[:7] for full in listing], json.dumps(self.incident.__dict__)
         self.assertGreaterEqual(len(later), 11)  # the leak's own fix among them
         for short in later:
@@ -74,8 +84,10 @@ class CodeToolsTest(unittest.TestCase):
         inventory = call(self.evidence, "commits", "inventory")
         web = call(self.evidence, "commits", "web")
         self.assertEqual(inventory["deployed"], cases.LEAK)
-        self.assertEqual(inventory["commits"][0][:4], [cases.LEAK, "2026-11-04T16:20:00-08:00", "Dev Patel",
-                                                       "inventory: move the stock check into a helper"])
+        self.assertEqual(
+            inventory["commits"][0][:4],
+            [cases.LEAK, "2026-11-04T16:20:00-08:00", "Dev Patel", "inventory: move the stock check into a helper"],
+        )
         self.assertEqual([row[0] for row in web["commits"]], [row[0] for row in inventory["commits"]][1:])
         self.assertIn(cases.LEAK, self.evidence.observed)
 

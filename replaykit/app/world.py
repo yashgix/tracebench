@@ -42,8 +42,10 @@ def load(root, name):
         module = importlib.util.module_from_spec(spec)
         sys.modules[name] = module
         spec.loader.exec_module(module)
-    return {part: importlib.import_module(f"{name}.{part}")
-            for part in ("app", "db", "inventory", "orders", "runtime", "telemetry", "web")}
+    return {
+        part: importlib.import_module(f"{name}.{part}")
+        for part in ("app", "db", "inventory", "orders", "runtime", "telemetry", "web")
+    }
 
 
 class Deployment:
@@ -63,10 +65,12 @@ class Deployment:
     def hold_lock(self, at_ms):
         """An outside job: from *at_ms* to the end of the run, a connection of its own holds a write transaction on
         `items`."""
+
         def begin():
             job = self.connect()
             job.execute("BEGIN IMMEDIATE")
             job.execute("UPDATE items SET stock = stock WHERE rowid = 1")
+
         self.runtime.call_at(at_ms, begin)
 
     def close(self):
@@ -81,8 +85,11 @@ class Deployment:
             old.running = False
         module = code[service]
         cls = {"web": "Web", "orders": "Orders", "inventory": "Inventory"}[service]
-        args = {"inventory": (self.connect,), "orders": (self.services.get("inventory"),),
-                "web": (self.services.get("orders"), self.services.get("inventory"))}[service]
+        args = {
+            "inventory": (self.connect,),
+            "orders": (self.services.get("inventory"),),
+            "web": (self.services.get("orders"), self.services.get("inventory")),
+        }[service]
         self.services[service] = instance = getattr(module, cls)(self.runtime, self.telemetry, *args)
         self._rewire()
         if hasattr(instance, "report_pool"):
@@ -130,6 +137,7 @@ def traffic(deployment, seed, skus, weights, until_ms, mean_gap_ms=500):
 
 def load_test(deployment, spec):
     """An internal client's checkouts at a fixed rate: *spec* has `user`, `sku`, `start_ms`, `end_ms`, `per_s`."""
+
     async def checkout():
         await deployment.services["web"].checkout(spec["user"], spec["sku"], 1)
 
@@ -143,17 +151,25 @@ def request_metrics(spans, until_ms):
     for minute in range(until_ms // MINUTE):
         start, end = minute * MINUTE, (minute + 1) * MINUTE
         for service in SERVICES:
-            done = [s for s in spans if s["kind"] == "server" and s["service"] == service and start <= s["end_ms"] < end]
+            done = [
+                s for s in spans if s["kind"] == "server" and s["service"] == service and start <= s["end_ms"] < end
+            ]
             if not done:
                 continue
             errors = sum(1 for s in done if s["status"] == "ERROR")
             durations = sorted(s["end_ms"] - s["start_ms"] for s in done)
             p95 = durations[max(0, -(-len(durations) * 95 // 100) - 1)]
             at = end
-            points += [{"time_ms": at, "service": service, "name": "http.server.request.count", "value": len(done)},
-                       {"time_ms": at, "service": service, "name": "http.server.error_rate",
-                        "value": round(errors / len(done), 4)},
-                       {"time_ms": at, "service": service, "name": "http.server.duration.p95", "value": p95}]
+            points += [
+                {"time_ms": at, "service": service, "name": "http.server.request.count", "value": len(done)},
+                {
+                    "time_ms": at,
+                    "service": service,
+                    "name": "http.server.error_rate",
+                    "value": round(errors / len(done), 4),
+                },
+                {"time_ms": at, "service": service, "name": "http.server.duration.p95", "value": p95},
+            ]
     return points
 
 

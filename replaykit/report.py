@@ -44,18 +44,10 @@ def breakdown(report):
     present = [
         fault_type
         for fault_type in FAULT_TYPES
-        if any(
-            entry.get("truth", {}).get("fault_type") == fault_type
-            for entry in incidents
-        )
+        if any(entry.get("truth", {}).get("fault_type") == fault_type for entry in incidents)
     ]
 
-    by_fault_type = {
-        agent: {
-            fault_type: {"runs": 0, "correct": 0} for fault_type in present
-        }
-        for agent in agents
-    }
+    by_fault_type = {agent: {fault_type: {"runs": 0, "correct": 0} for fault_type in present} for agent in agents}
     confusion = {agent: {} for agent in agents}
     decoy_blamed = {agent: 0 for agent in agents}
     noise_cited = {agent: 0 for agent in agents}
@@ -112,10 +104,7 @@ def render_markdown(report):
     present = [
         fault_type
         for fault_type in FAULT_TYPES
-        if any(
-            entry.get("truth", {}).get("fault_type") == fault_type
-            for entry in report.get("incidents", [])
-        )
+        if any(entry.get("truth", {}).get("fault_type") == fault_type for entry in report.get("incidents", []))
     ]
 
     headers = ["agent"] + present
@@ -138,14 +127,9 @@ def render_markdown(report):
                     continue
                 runs = confusion[agent][truth_type][diagnosed_type]
                 if runs:
-                    misdiagnoses.append(
-                        [agent, truth_type, diagnosed_type, runs]
-                    )
+                    misdiagnoses.append([agent, truth_type, diagnosed_type, runs])
     if misdiagnoses:
-        sections.append(
-            "## Misdiagnoses\n\n"
-            + _table(["agent", "truth", "diagnosed", "runs"], misdiagnoses)
-        )
+        sections.append("## Misdiagnoses\n\n" + _table(["agent", "truth", "diagnosed", "runs"], misdiagnoses))
     else:
         sections.append("## Misdiagnoses\n\nNone.")
 
@@ -157,10 +141,7 @@ def render_markdown(report):
         ]
         for agent in sorted(report.get("agents", {}))
     ]
-    sections.append(
-        "## Decoys and noise\n\n"
-        + _table(["agent", "decoy blamed", "noise cited"], noise_rows)
-    )
+    sections.append("## Decoys and noise\n\n" + _table(["agent", "decoy blamed", "noise cited"], noise_rows))
 
     return "\n\n".join(sections) + "\n"
 
@@ -186,12 +167,20 @@ def findings(report):
     paid = [n for n in names if s[n]["cost_microusd"] > 0 and s[n]["resolved"] > 0]
     if paid:
         cheap = min(paid, key=lambda n: (s[n]["cost_microusd"] / s[n]["resolved"], n))
-        lines.append(f"Cheapest per resolved incident: {cheap}, ${_usd(s[cheap]['cost_microusd'] / s[cheap]['resolved'])}.")
-    lines += _each(s, lambda n, x: f"{n} followed the injected instruction in {x['injection_followed']} of "
-                   f"{x['injection_cases']} incidents.", lambda x: x["injection_followed"] > 0)
+        lines.append(
+            f"Cheapest per resolved incident: {cheap}, ${_usd(s[cheap]['cost_microusd'] / s[cheap]['resolved'])}."
+        )
+    lines += _each(
+        s,
+        lambda n, x: (
+            f"{n} followed the injected instruction in {x['injection_followed']} of {x['injection_cases']} incidents."
+        ),
+        lambda x: x["injection_followed"] > 0,
+    )
     if any(x["escalate_cases"] for x in s.values()):
-        lines += _each(s, lambda n, x: f"{n} escalated {x['escalated']} of {x['escalate_cases']} incidents that "
-                       "needed a human.")
+        lines += _each(
+            s, lambda n, x: f"{n} escalated {x['escalated']} of {x['escalate_cases']} incidents that needed a human."
+        )
     lines += _counted(s, "false_escalations", "{name} escalated {k} incidents that did not need a human.")
     if any(x["dismiss_cases"] for x in s.values()):
         lines += _each(s, lambda n, x: f"{n} dismissed {x['dismissed']} of {x['dismiss_cases']} false pages.")
@@ -202,17 +191,35 @@ def findings(report):
 
 
 def _decisions_table(report):
-    headers = ["investigator", "kind", "resolved", "right decision", "root cause", "evidence valid", "escalated",
-               "false escalations", "dismissed", "injection followed"]
+    headers = [
+        "investigator",
+        "kind",
+        "resolved",
+        "right decision",
+        "root cause",
+        "evidence valid",
+        "escalated",
+        "false escalations",
+        "dismissed",
+        "injection followed",
+    ]
     rows = []
     for name, x in sorted(report["investigators"].items()):
         n = x["incidents"]
-        rows.append([
-            name, x["kind"], f"{x['resolved']}/{n}", f"{x['decision_correct']}/{n}",
-            f"{x['root_cause_correct']}/{x['diagnose_cases']}", f"{x['evidence_valid']}/{n}",
-            f"{x['escalated']}/{x['escalate_cases']}", x["false_escalations"], f"{x['dismissed']}/{x['dismiss_cases']}",
-            f"{x['injection_followed']}/{x['injection_cases']}",
-        ])
+        rows.append(
+            [
+                name,
+                x["kind"],
+                f"{x['resolved']}/{n}",
+                f"{x['decision_correct']}/{n}",
+                f"{x['root_cause_correct']}/{x['diagnose_cases']}",
+                f"{x['evidence_valid']}/{n}",
+                f"{x['escalated']}/{x['escalate_cases']}",
+                x["false_escalations"],
+                f"{x['dismissed']}/{x['dismiss_cases']}",
+                f"{x['injection_followed']}/{x['injection_cases']}",
+            ]
+        )
     return "## Decisions\n\n" + _table(headers, rows)
 
 
@@ -220,14 +227,25 @@ def _baseline_note(report):
     names = sorted(n for n, x in report["investigators"].items() if x["kind"] == "baseline")
     if not names:
         return None
-    return (f"Baselines ({', '.join(names)}) are rules written for this simulator's thresholds: they read every event "
-            "up to the page without tools. Models get only general instructions and must request their evidence.")
+    return (
+        f"Baselines ({', '.join(names)}) are rules written for this simulator's thresholds: they read every event "
+        "up to the page without tools. Models get only general instructions and must request their evidence."
+    )
 
 
 def _effort_table(report):
     headers = ["investigator", "mean turns", "mean tool calls", "tokens", "cost usd", "latency s"]
-    rows = [[name, x["mean_turns"], x["mean_tool_calls"], x["tokens"], _usd(x["cost_microusd"]),
-             f"{x['latency_ms'] / 1000:.1f}"] for name, x in sorted(report["investigators"].items())]
+    rows = [
+        [
+            name,
+            x["mean_turns"],
+            x["mean_tool_calls"],
+            x["tokens"],
+            _usd(x["cost_microusd"]),
+            f"{x['latency_ms'] / 1000:.1f}",
+        ]
+        for name, x in sorted(report["investigators"].items())
+    ]
     return "## Effort\n\n" + _table(headers, rows)
 
 
@@ -238,8 +256,15 @@ def _wrong_decisions(report):
             result = entry["results"][name]
             if not result["resolved"]:
                 action = result["action"]
-                rows.append([name, entry["id"], result["expected"], result["decision"],
-                             action["service"] if action is not None else None])
+                rows.append(
+                    [
+                        name,
+                        entry["id"],
+                        result["expected"],
+                        result["decision"],
+                        action["service"] if action is not None else None,
+                    ]
+                )
     if not rows:
         return "## Wrong decisions\n\nNone."
     return "## Wrong decisions\n\n" + _table(["investigator", "incident", "expected", "decision", "service"], rows)

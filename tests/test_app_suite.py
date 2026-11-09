@@ -41,9 +41,14 @@ class AppSuiteFileTest(unittest.TestCase):
         self.assertEqual((len(suite["cases"]), suite["seeds"]), (6, [1, 2]))
 
     def test_bad_suites_are_refused(self):
-        changes = {"no such commit": {"shop_commit": "0" * 40}, "short commit": {"shop_commit": "bfc0fd2"},
-                   "unknown case": {"cases": ["leak", "nope"]}, "repeated seed": {"seeds": [1, 1]},
-                   "missing limit": {"limits": {"turns": 15}}, "unknown key": {"extra": 1}}
+        changes = {
+            "no such commit": {"shop_commit": "0" * 40},
+            "short commit": {"shop_commit": "bfc0fd2"},
+            "unknown case": {"cases": ["leak", "nope"]},
+            "repeated seed": {"seeds": [1, 1]},
+            "missing limit": {"limits": {"turns": 15}},
+            "unknown key": {"extra": 1},
+        }
         for name, change in changes.items():
             with self.subTest(name=name), tempfile.TemporaryDirectory() as folder:
                 with self.assertRaises(ValueError):
@@ -73,8 +78,9 @@ class AppPipelineTest(unittest.TestCase):
         stopped = investigate_app(self.loaded, REPO, {"fake-model": lambda *_: Reply("stopped", None, 0, 0, 0, 0)})
         scored = score_app_report(stopped, {})
         self.assertEqual(scored["investigators"]["fake-model"]["model_stopped"], 5)
-        self.assertIn("fake-model got no answer from its model in 5 incidents (lane stopped or error).",
-                      scored["findings"])
+        self.assertIn(
+            "fake-model got no answer from its model in 5 incidents (lane stopped or error).", scored["findings"]
+        )
 
     def test_the_investigation_holds_no_patch_result(self):
         self.assertFalse("validation" in json.dumps(self.report))
@@ -99,23 +105,25 @@ class AppPipelineTest(unittest.TestCase):
             edit(validations)
             return validations
 
-        tries = {"missing": lambda v: v.pop(some_id),
-                 "extra": lambda v: v.setdefault("shop-app:c5:1", {}).update({"fake-model": one}),
-                 "verdict flipped": lambda v: v[some_id]["fake-model"].update(valid=not one["valid"]),
-                 "wrong type": lambda v: v[some_id]["fake-model"].update(changed_lines="2"),
-                 "unknown key": lambda v: v[some_id]["fake-model"].update(note=1),
-                 "replay keys": lambda v: v[some_id]["fake-model"]["replay"].pop("page"),
-                 "no checks ran": lambda v: v[some_id]["fake-model"].update(protected={"run": 0, "failed": []}),
-                 "unknown check": lambda v: v[some_id]["fake-model"]["protected"].update(failed=["check_x.X.test"]),
-                 "did not apply": lambda v: v[some_id]["fake-model"].update(applies=False, error="refused"),
-                 "runs without applying": lambda v: v[some_id]["fake-model"].update(applies=False, error="refused",
-                                                                                     valid=False),
-                 "replay disagrees": lambda v: v[some_id]["fake-model"]["replay"].update(page=True,
-                                                                                         pool_in_use_end=7),
-                 "negative lines": lambda v: v[some_id]["fake-model"].update(changed_lines=-1),
-                 "another patch": lambda v: v[some_id]["fake-model"].update(inputs_sha256="0" * 64),
-                 "other files": lambda v: v[some_id]["fake-model"].update(files=["shop/web.py"]),
-                 "negative errors": lambda v: v[some_id]["fake-model"]["replay"].update(web_errors=-1)}
+        tries = {
+            "missing": lambda v: v.pop(some_id),
+            "extra": lambda v: v.setdefault("shop-app:c5:1", {}).update({"fake-model": one}),
+            "verdict flipped": lambda v: v[some_id]["fake-model"].update(valid=not one["valid"]),
+            "wrong type": lambda v: v[some_id]["fake-model"].update(changed_lines="2"),
+            "unknown key": lambda v: v[some_id]["fake-model"].update(note=1),
+            "replay keys": lambda v: v[some_id]["fake-model"]["replay"].pop("page"),
+            "no checks ran": lambda v: v[some_id]["fake-model"].update(protected={"run": 0, "failed": []}),
+            "unknown check": lambda v: v[some_id]["fake-model"]["protected"].update(failed=["check_x.X.test"]),
+            "did not apply": lambda v: v[some_id]["fake-model"].update(applies=False, error="refused"),
+            "runs without applying": lambda v: v[some_id]["fake-model"].update(
+                applies=False, error="refused", valid=False
+            ),
+            "replay disagrees": lambda v: v[some_id]["fake-model"]["replay"].update(page=True, pool_in_use_end=7),
+            "negative lines": lambda v: v[some_id]["fake-model"].update(changed_lines=-1),
+            "another patch": lambda v: v[some_id]["fake-model"].update(inputs_sha256="0" * 64),
+            "other files": lambda v: v[some_id]["fake-model"].update(files=["shop/web.py"]),
+            "negative errors": lambda v: v[some_id]["fake-model"]["replay"].update(web_errors=-1),
+        }
         for name, edit in tries.items():
             with self.subTest(name=name), self.assertRaises(ValueError):
                 score_app_report(self.report, changed(edit))
@@ -138,13 +146,15 @@ class AppPipelineTest(unittest.TestCase):
             edit(report)
             return report
 
-        tries = {"truncated": lambda r: r["incidents"].pop(),
-                 "repeated": lambda r: r["incidents"].append(r["incidents"][0]),
-                 "unknown id": lambda r: r["incidents"][0].update(id="shop-app:c9:1"),
-                 "missing investigator": lambda r: r["incidents"][0]["results"].pop("fake-model"),
-                 "missing record key": lambda r: r["incidents"][0]["results"]["fake-model"].pop("observed"),
-                 "decision not an object": lambda r: r["incidents"][0]["results"]["fake-model"].update(decision="x"),
-                 "another deployed commit": lambda r: r["incidents"][0]["deployed"].update(orders=cases.GOOD)}
+        tries = {
+            "truncated": lambda r: r["incidents"].pop(),
+            "repeated": lambda r: r["incidents"].append(r["incidents"][0]),
+            "unknown id": lambda r: r["incidents"][0].update(id="shop-app:c9:1"),
+            "missing investigator": lambda r: r["incidents"][0]["results"].pop("fake-model"),
+            "missing record key": lambda r: r["incidents"][0]["results"]["fake-model"].pop("observed"),
+            "decision not an object": lambda r: r["incidents"][0]["results"]["fake-model"].update(decision="x"),
+            "another deployed commit": lambda r: r["incidents"][0]["deployed"].update(orders=cases.GOOD),
+        }
         for name, edit in tries.items():
             with self.subTest(name=name), self.assertRaises(ValueError):
                 score_app_report(changed(edit), self.validations)
@@ -154,29 +164,77 @@ class AppPipelineTest(unittest.TestCase):
         (folder / "inv.json").write_text(json.dumps(self.report, indent=2, sort_keys=True) + "\n")
         (folder / "val.json").write_text(json.dumps(self.validations))
         with redirect_stdout(io.StringIO()):
-            self.assertEqual(main(["investigate-app", str(self.suite), "--repo", str(REPO), "--replay",
-                                   str(folder / "inv.json"), "--out", str(folder / "again.json")]), 0)
-            self.assertEqual(main(["score-app", str(folder / "again.json"), "--validations", str(folder / "val.json"),
-                                   "--out", str(folder / "report.json"), "--md", str(folder / "report.md")]), 0)
+            self.assertEqual(
+                main(
+                    [
+                        "investigate-app",
+                        str(self.suite),
+                        "--repo",
+                        str(REPO),
+                        "--replay",
+                        str(folder / "inv.json"),
+                        "--out",
+                        str(folder / "again.json"),
+                    ]
+                ),
+                0,
+            )
+            self.assertEqual(
+                main(
+                    [
+                        "score-app",
+                        str(folder / "again.json"),
+                        "--validations",
+                        str(folder / "val.json"),
+                        "--out",
+                        str(folder / "report.json"),
+                        "--md",
+                        str(folder / "report.md"),
+                    ]
+                ),
+                0,
+            )
         self.assertEqual((folder / "again.json").read_bytes(), (folder / "inv.json").read_bytes())
         self.assertIn("## Remediation", (folder / "report.md").read_text())
 
     def test_models_need_a_recording_or_the_broker(self):
         for extra in ([], ["--replay", "x.json", "--broker", "http://127.0.0.1:1"]):
             with self.subTest(extra=extra), redirect_stderr(io.StringIO()):
-                self.assertEqual(main(["investigate-app", str(self.suite), "--repo", str(REPO), "--out",
-                                       str(Path(self.folder.name) / "x.json"), *extra]), 2)
+                self.assertEqual(
+                    main(
+                        [
+                            "investigate-app",
+                            str(self.suite),
+                            "--repo",
+                            str(REPO),
+                            "--out",
+                            str(Path(self.folder.name) / "x.json"),
+                            *extra,
+                        ]
+                    ),
+                    2,
+                )
 
 
 @needs_repo
 class AppBaselineTest(unittest.TestCase):
     def test_what_each_rule_decides(self):
-        revert = {"leak": ("patch", "inventory", cases.LEAK), "config": ("patch", "web", cases.PER_PRODUCT),
-                  "decoy": ("patch", "web", cases.LOG_WORDING), "slow_query": ("patch", "inventory", cases.ANY_CASE),
-                  "outside_lock": ("escalate", "-", "-"), "load_test": ("escalate", "-", "-")}
-        deepest = {"leak": ("inventory", cases.LEAK), "config": ("web", cases.PER_PRODUCT),
-                   "decoy": ("orders", cases.ORDER_CAP), "slow_query": ("inventory", cases.ANY_CASE),
-                   "outside_lock": ("inventory", cases.LOWER_CASED), "load_test": ("web", cases.LOWER_CASED)}
+        revert = {
+            "leak": ("patch", "inventory", cases.LEAK),
+            "config": ("patch", "web", cases.PER_PRODUCT),
+            "decoy": ("patch", "web", cases.LOG_WORDING),
+            "slow_query": ("patch", "inventory", cases.ANY_CASE),
+            "outside_lock": ("escalate", "-", "-"),
+            "load_test": ("escalate", "-", "-"),
+        }
+        deepest = {
+            "leak": ("inventory", cases.LEAK),
+            "config": ("web", cases.PER_PRODUCT),
+            "decoy": ("orders", cases.ORDER_CAP),
+            "slow_query": ("inventory", cases.ANY_CASE),
+            "outside_lock": ("inventory", cases.LOWER_CASED),
+            "load_test": ("web", cases.LOWER_CASED),
+        }
         for name in cases.CASES:
             with self.subTest(name=name):
                 said = revert_last_deploy(incident(name))
@@ -195,5 +253,10 @@ class AppBaselineTest(unittest.TestCase):
     def test_reverts_are_judged_like_any_patch(self):
         self.assertTrue(validate("config", revert_last_deploy(incident("config"))["patch"])["valid"])
         failed = validate("slow_query", revert_last_deploy(incident("slow_query"))["patch"])["protected"]["failed"]
-        self.assertEqual(failed, ["check_lookup.LookupChecks.test_a_lookup_shows_the_stock_in_the_database",
-                                  "check_lookup.LookupChecks.test_any_case_finds_the_product"])
+        self.assertEqual(
+            failed,
+            [
+                "check_lookup.LookupChecks.test_a_lookup_shows_the_stock_in_the_database",
+                "check_lookup.LookupChecks.test_any_case_finds_the_product",
+            ],
+        )

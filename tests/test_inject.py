@@ -33,9 +33,7 @@ def metric_map(incident, service, name):
     return {
         event["t"]: event["attrs"]["value"]
         for event in incident.events
-        if event["kind"] == "metric"
-        and event["service"] == service
-        and event["attrs"]["name"] == name
+        if event["kind"] == "metric" and event["service"] == service and event["attrs"]["name"] == name
     }
 
 
@@ -150,10 +148,7 @@ class IdsAndOrderTest(unittest.TestCase):
         incident = inject(scenario(), fault(service="db"), 3)
         ids = [event["id"] for event in incident.events]
         self.assertEqual(ids, [f"ev-{i:04d}" for i in range(1, len(ids) + 1)])
-        keys = [
-            (e["t"], e["kind"], e["service"], json.dumps(e["attrs"], sort_keys=True))
-            for e in incident.events
-        ]
+        keys = [(e["t"], e["kind"], e["service"], json.dumps(e["attrs"], sort_keys=True)) for e in incident.events]
         self.assertEqual(keys, sorted(keys))
 
     def test_background_event_gets_new_id(self):
@@ -269,9 +264,7 @@ class DependencyTimeoutTest(unittest.TestCase):
 
 class MemoryLeakTest(unittest.TestCase):
     def setUp(self):
-        self.incident = inject(
-            scenario(duration=1200), fault(type="memory_leak", service="db", start=120), 4
-        )
+        self.incident = inject(scenario(duration=1200), fault(type="memory_leak", service="db", start=120), 4)
         self.memory = metric_map(self.incident, "db", "memory_mb")
 
     def test_memory_grows_by_40_per_sample(self):
@@ -333,14 +326,10 @@ class InjectedIdsTest(unittest.TestCase):
                 self.assertNotIn(event["id"], injected)
 
     def test_memory_leak_marks_memory_and_post_oom_error_rate(self):
-        incident = inject(
-            scenario(duration=1200), fault(type="memory_leak", service="db", start=120), 4
-        )
+        incident = inject(scenario(duration=1200), fault(type="memory_leak", service="db", start=120), 4)
         injected = incident.truth.injected_ids
         target_metrics = [
-            e
-            for e in incident.events
-            if e["kind"] == "metric" and e["service"] == "db" and e["t"] >= 120
+            e for e in incident.events if e["kind"] == "metric" and e["service"] == "db" and e["t"] >= 120
         ]
         memory = [e for e in target_metrics if e["attrs"]["name"] == "memory_mb"]
         self.assertEqual(len(memory), 19)
@@ -350,9 +339,7 @@ class InjectedIdsTest(unittest.TestCase):
                 self.assertIn(event["id"], injected)
             else:
                 self.assertNotIn(event["id"], injected)
-        api_ids = {
-            e["id"] for e in incident.events if e["service"] == "api" and e["kind"] == "metric"
-        }
+        api_ids = {e["id"] for e in incident.events if e["service"] == "api" and e["kind"] == "metric"}
         self.assertFalse(injected & api_ids)
 
 

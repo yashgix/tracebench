@@ -26,15 +26,9 @@ def _summary(records):
     diagnosed = sum(1 for run, _ in records if run.diagnosis is not None)
     correct = sum(1 for _, result in records if result["root_cause_correct"])
     total_points = sum(result["points"] for _, result in records)
-    delays = [
-        result["delay"]
-        for _, result in records
-        if result["root_cause_correct"] and result["delay"] is not None
-    ]
+    delays = [result["delay"] for _, result in records if result["root_cause_correct"] and result["delay"] is not None]
     pairs = [
-        (run.diagnosis.confidence, result["root_cause_correct"])
-        for run, result in records
-        if run.diagnosis is not None
+        (run.diagnosis.confidence, result["root_cause_correct"]) for run, result in records if run.diagnosis is not None
     ]
     return {
         "runs": runs,
@@ -80,8 +74,11 @@ def _validate_names(value, what, allowed):
     if not isinstance(value, list) or not value:
         raise ValueError(f"suite {what} must be a non-empty list")
     if any(not isinstance(name, str) or not allowed(name) for name in value):
-        raise ValueError(f"suite {what} must be names from {AGENT_NAMES}" if what == "agents"
-                         else f"suite {what} must be baseline or model names")
+        raise ValueError(
+            f"suite {what} must be names from {AGENT_NAMES}"
+            if what == "agents"
+            else f"suite {what} must be baseline or model names"
+        )
     if len(set(value)) != len(value):
         raise ValueError(f"suite {what} must be distinct")
 
@@ -165,8 +162,12 @@ def _load(path, validate):
     scenario = parse_scenario(scenario_raw, scenario_path)
     for case in suite["cases"]:
         validate_fault(scenario, case)
-    return {"suite": suite, "scenario": scenario, "suite_sha256": hashlib.sha256(raw).hexdigest(),
-            "scenario_sha256": scenario_sha256}
+    return {
+        "suite": suite,
+        "scenario": scenario,
+        "suite_sha256": hashlib.sha256(raw).hexdigest(),
+        "scenario_sha256": scenario_sha256,
+    }
 
 
 def load_suite(path):
@@ -186,15 +187,25 @@ def _incidents(loaded):
 
 def _meta(loaded):
     suite, scenario = loaded["suite"], loaded["scenario"]
-    return {"suite_id": suite["id"], "suite_sha256": loaded["suite_sha256"], "scenario_id": scenario["id"],
-            "scenario_sha256": loaded["scenario_sha256"], "replaykit_version": __version__,
-            "seeds": list(suite["seeds"])}
+    return {
+        "suite_id": suite["id"],
+        "suite_sha256": loaded["suite_sha256"],
+        "scenario_id": scenario["id"],
+        "scenario_sha256": loaded["scenario_sha256"],
+        "replaykit_version": __version__,
+        "seeds": list(suite["seeds"]),
+    }
 
 
 def _pinned_truth(entry, incident, case, runs):
     truth = incident.truth
-    entry["truth"] = {"service": truth.service, "fault_type": truth.fault_type, "start": truth.start,
-                      "cascade": case.get("cascade", False), "decoy_service": truth.decoy_service}
+    entry["truth"] = {
+        "service": truth.service,
+        "fault_type": truth.fault_type,
+        "start": truth.start,
+        "cascade": case.get("cascade", False),
+        "decoy_service": truth.decoy_service,
+    }
     for name, result in entry["results"].items():
         run = runs[name]
         result.update(noise_score(incident, run))
@@ -228,20 +239,26 @@ def _investigator_summary(results):
         return sum(1 for r in results if r["expected"] == expected)
 
     return {
-        "incidents": count, "resolved": total("resolved"), "decision_correct": total("decision_correct"),
-        "root_cause_correct": total("root_cause_correct"), "diagnose_cases": cases("diagnose"),
+        "incidents": count,
+        "resolved": total("resolved"),
+        "decision_correct": total("decision_correct"),
+        "root_cause_correct": total("root_cause_correct"),
+        "diagnose_cases": cases("diagnose"),
         "evidence_valid": total("evidence_valid"),
         "invalid_evidence": sum(1 for r in results if r["decision"] is not None and not r["evidence_valid"]),
-        "escalated": total("decision_correct", "escalate"), "escalate_cases": cases("escalate"),
+        "escalated": total("decision_correct", "escalate"),
+        "escalate_cases": cases("escalate"),
         "false_escalations": sum(1 for r in results if r["decision"] == "escalate" and r["expected"] != "escalate"),
-        "dismissed": total("decision_correct", "dismiss"), "dismiss_cases": cases("dismiss"),
+        "dismissed": total("decision_correct", "dismiss"),
+        "dismiss_cases": cases("dismiss"),
         "injection_followed": total("injection_followed"),
         "injection_cases": sum(1 for r in results if r["injection_service"] is not None),
         "decoy_blamed": total("decoy_blamed"),
         "budget_exhausted": sum(1 for r in results if r["outcome"] == "budget_exhausted"),
         "mean_turns": round(sum(r["turns"] for r in results) / count, 1),
         "mean_tool_calls": round(sum(r["tool_calls"] for r in results) / count, 1),
-        "tokens": sum(r["tokens"] for r in results), "cost_microusd": sum(r["cost_microusd"] for r in results),
+        "tokens": sum(r["tokens"] for r in results),
+        "cost_microusd": sum(r["cost_microusd"] for r in results),
         "latency_ms": sum(r["latency_ms"] for r in results),
     }
 
@@ -251,14 +268,18 @@ def _investigation_result(incident, name, models, limits):
         inv = baseline_investigation(incident, name)
     else:
         inv = investigate(incident, models[name], limits)
-    return {**score_investigation(incident, inv), "now": inv.now, "action": inv.decision,
-            "transcript": inv.transcript}
+    return {**score_investigation(incident, inv), "now": inv.now, "action": inv.decision, "transcript": inv.transcript}
 
 
 def _investigation_truth(truth):
-    return {"service": truth.service, "fault_type": truth.fault_type, "start": truth.start,
-            "expected": truth.expected, "decoy_service": truth.decoy_service,
-            "injection_service": truth.injection_service}
+    return {
+        "service": truth.service,
+        "fault_type": truth.fault_type,
+        "start": truth.start,
+        "expected": truth.expected,
+        "decoy_service": truth.decoy_service,
+        "injection_service": truth.injection_service,
+    }
 
 
 def run_investigations(path, models):
@@ -276,12 +297,16 @@ def run_investigations(path, models):
         incidents.append({"id": incident.id, "truth": _investigation_truth(incident.truth), "results": results})
     summaries = {}
     for name in names:
-        rows = [{**entry["results"][name], "injection_service": entry["truth"]["injection_service"]}
-                for entry in incidents]
+        rows = [
+            {**entry["results"][name], "injection_service": entry["truth"]["injection_service"]} for entry in incidents
+        ]
         summaries[name] = {"kind": "baseline" if name in AGENT_NAMES else "model", **_investigator_summary(rows)}
-    meta = {**_meta(loaded), "limits": dict(suite["limits"]),
-            "prompt_sha256": hashlib.sha256((GIVEN / "prompt.txt").read_bytes()).hexdigest(),
-            "schema_sha256": hashlib.sha256((GIVEN / "action.schema.json").read_bytes()).hexdigest()}
+    meta = {
+        **_meta(loaded),
+        "limits": dict(suite["limits"]),
+        "prompt_sha256": hashlib.sha256((GIVEN / "prompt.txt").read_bytes()).hexdigest(),
+        "schema_sha256": hashlib.sha256((GIVEN / "action.schema.json").read_bytes()).hexdigest(),
+    }
     report = {"meta": meta, "investigators": summaries, "incidents": incidents}
     report["findings"] = findings(report)
     return report

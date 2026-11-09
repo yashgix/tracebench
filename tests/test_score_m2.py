@@ -82,15 +82,11 @@ class NoiseCitedTest(unittest.TestCase):
         incident = make_incident({"decoy_deploy": True}, start=300)
         decoy = incident.truth.decoy_service
         decoy_id = next(
-            event["id"]
-            for event in incident.events
-            if event["kind"] == "deploy" and event["service"] == decoy
+            event["id"] for event in incident.events if event["kind"] == "deploy" and event["service"] == decoy
         )
         self.assertIn(decoy_id, incident.truth.noise_ids)
         self.assertNotIn(decoy_id, incident.truth.injected_ids)
-        self.assertEqual(
-            noise_score(incident, run_with(evidence=(decoy_id,)))["noise_cited"], 1
-        )
+        self.assertEqual(noise_score(incident, run_with(evidence=(decoy_id,)))["noise_cited"], 1)
 
     def test_injected_and_unknown_ids_do_not_count(self):
         incident = make_incident({"flapping_alerts": 2})
@@ -106,9 +102,7 @@ class NoiseCitedTest(unittest.TestCase):
         self.assertEqual(result["noise_cited"], 0)
 
     def test_decoy_and_noise_can_both_trigger(self):
-        incident = make_incident(
-            {"decoy_deploy": True, "flapping_alerts": 3}, start=300
-        )
+        incident = make_incident({"decoy_deploy": True, "flapping_alerts": 3}, start=300)
         noise_ids = sorted(incident.truth.noise_ids)
         run = run_with(
             service=incident.truth.decoy_service,

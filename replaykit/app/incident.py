@@ -24,8 +24,9 @@ def run_case(repo, case):
         for service in reversed(world.SERVICES):
             deployment.deploy(service, code[case["baseline"]], case["baseline"])
         for d in case["deploys"]:
-            deployment.runtime.call_at(d["at_ms"], lambda d=d: deployment.deploy(d["service"], code[d["commit"]],
-                                                                                 d["commit"]))
+            deployment.runtime.call_at(
+                d["at_ms"], lambda d=d: deployment.deploy(d["service"], code[d["commit"]], d["commit"])
+            )
         world.traffic(deployment, case["seed"], skus, weights, case["duration_ms"])
         if "load_test" in case:
             world.load_test(deployment, case["load_test"])
@@ -35,5 +36,11 @@ def run_case(repo, case):
         deployment.close()
     telemetry = deployment.telemetry
     metrics = world.request_metrics(telemetry.spans, case["duration_ms"])
-    return {"spans": list(telemetry.spans), "logs": list(telemetry.logs), "gauges": list(telemetry.gauges),
-            "metrics": metrics, "deploys": list(deployment.deploys), "page": world.first_page(metrics)}
+    return {
+        "spans": list(telemetry.spans),
+        "logs": list(telemetry.logs),
+        "gauges": list(telemetry.gauges),
+        "metrics": metrics,
+        "deploys": list(deployment.deploys),
+        "page": world.first_page(metrics),
+    }

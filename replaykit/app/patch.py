@@ -19,14 +19,53 @@ PATH = re.compile(r"shop/[a-z_]+\.py")
 LOCKED = ("shop/db.py", "shop/pool.py", "shop/runtime.py", "shop/telemetry.py")
 SETTINGS = ("QUERY_MS", "SCAN_US_PER_ROW", "POOL_REPORT_MS")
 INSTRUMENTS = re.compile(rf"\b(?:{'|'.join(SETTINGS)})\s*[^=\s]?=(?!=)")  # an assignment to one of them
-DENIED = ("exec", "eval", "open", "compile", "globals", "locals", "vars", "getattr", "setattr", "delattr", "exit",
-          "quit", "print", "breakpoint", "input", "help", "sys", "os", "builtins", "sqlite3", "subprocess")
+DENIED = (
+    "exec",
+    "eval",
+    "open",
+    "compile",
+    "globals",
+    "locals",
+    "vars",
+    "getattr",
+    "setattr",
+    "delattr",
+    "exit",
+    "quit",
+    "print",
+    "breakpoint",
+    "input",
+    "help",
+    "sys",
+    "os",
+    "builtins",
+    "sqlite3",
+    "subprocess",
+)
 # Names a patch may not add, as a name or an attribute: the denied names, every standard-library module (reachable
 # through modules the app imports), the interpreter's handles, the database calls that run SQL, and `type` (a
 # connection built from its class would skip the checks' tracing).
-REACH = frozenset({*DENIED, *sys.stdlib_module_names, "bltns", "modules", "argv", "stdin", "stdout", "stderr",
-                   "execute", "executemany", "executescript", "enable_load_extension", "create_function",
-                   "set_authorizer", "set_trace_callback", "set_progress_handler", "type"})
+REACH = frozenset(
+    {
+        *DENIED,
+        *sys.stdlib_module_names,
+        "bltns",
+        "modules",
+        "argv",
+        "stdin",
+        "stdout",
+        "stderr",
+        "execute",
+        "executemany",
+        "executescript",
+        "enable_load_extension",
+        "create_function",
+        "set_authorizer",
+        "set_trace_callback",
+        "set_progress_handler",
+        "type",
+    }
+)
 INTERNALS = ("spans", "logs", "gauges", "in_use", "opened", "now", "_idle", "_waiters", "_queue", "_connect")
 SQL = ("ATTACH", "DETACH", "VACUUM", "PRAGMA", "LOAD_EXTENSION")
 FORBIDDEN = re.compile(rf"\bimport\b|__|\b(?:{'|'.join(DENIED)})\b|(?i:\b(?:{'|'.join(SQL)})\b)")
@@ -36,14 +75,19 @@ ROOT = Path(__file__).resolve().parents[2]
 PROTECTED = Path("replaykit/app/protected")  # inside a replaykit tree
 RESULT_KEYS = ("files", "changed_lines", "applies", "error", "own_tests", "protected", "replay", "valid")
 REPLAY_KEYS = ("page", "pool_in_use_end", "web_errors", "clean")
-GIT_ENV = {"PATH": "/usr/bin:/bin", "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_CONFIG_NOSYSTEM": "1",
-           "GIT_AUTHOR_DATE": "2026-11-07T00:00:00Z", "GIT_COMMITTER_DATE": "2026-11-07T00:00:00Z"}
+GIT_ENV = {
+    "PATH": "/usr/bin:/bin",
+    "GIT_CONFIG_GLOBAL": "/dev/null",
+    "GIT_CONFIG_NOSYSTEM": "1",
+    "GIT_AUTHOR_DATE": "2026-11-07T00:00:00Z",
+    "GIT_COMMITTER_DATE": "2026-11-07T00:00:00Z",
+}
 
 
 def _file(header, line):
     if not line.startswith(header):
         raise ValueError(f"expected a {header.strip()!r} line, got {line[:60]!r}")
-    path = line[len(header):]
+    path = line[len(header) :]
     if not PATH.fullmatch(path) or path in LOCKED:
         raise ValueError(f"a patch may change only shop/*.py outside {', '.join(LOCKED)}, not {path!r}")
     return path
@@ -91,9 +135,13 @@ def check_ids(tree, checks):
     ids = set()
     for name in checks:
         module = ast.parse((tree / PROTECTED / name).read_text())
-        ids |= {f"{name.removesuffix('.py')}.{cls.name}.{fn.name}" for cls in module.body
-                if isinstance(cls, ast.ClassDef) for fn in cls.body
-                if isinstance(fn, ast.FunctionDef) and fn.name.startswith("test_")}
+        ids |= {
+            f"{name.removesuffix('.py')}.{cls.name}.{fn.name}"
+            for cls in module.body
+            if isinstance(cls, ast.ClassDef)
+            for fn in cls.body
+            if isinstance(fn, ast.FunctionDef) and fn.name.startswith("test_")
+        }
     return ids
 
 
@@ -105,8 +153,15 @@ def _job(runner, args, cwd, clone):
 
 def _run(args, cwd, env=None, stdin=None):
     try:
-        return subprocess.run(args, cwd=cwd, env=env or {"PATH": "/usr/bin:/bin"}, input=stdin, capture_output=True,
-                              text=True, timeout=TIMEOUT_S)
+        return subprocess.run(
+            args,
+            cwd=cwd,
+            env=env or {"PATH": "/usr/bin:/bin"},
+            input=stdin,
+            capture_output=True,
+            text=True,
+            timeout=TIMEOUT_S,
+        )
     except subprocess.TimeoutExpired:
         return None
 
@@ -121,8 +176,10 @@ class LocalRunner:
     def __call__(self, args, cwd, scratch, read):
         """(exit code, stdout) of `python -B *args*`, writing only to *scratch*, or None on timeout. *read* (the
         clone) is what a stricter runner must also let the job read."""
-        profile = (f'(version 1)(allow default)(deny network*)(deny file-write*)'
-                   f'(allow file-write* (subpath "{Path(scratch).resolve()}") (literal "/dev/null"))')
+        profile = (
+            f'(version 1)(allow default)(deny network*)(deny file-write*)'
+            f'(allow file-write* (subpath "{Path(scratch).resolve()}") (literal "/dev/null"))'
+        )
         env = {"PATH": "/usr/bin:/bin", "HOME": str(scratch), "TMPDIR": str(scratch)}
         done = _run(["/usr/bin/sandbox-exec", "-p", profile, sys.executable, "-B", *args], cwd, env)
         return None if done is None else (done.returncode, done.stdout)
@@ -131,12 +188,14 @@ class LocalRunner:
 def _apply(repo, base, patch, clone):
     """Commit *patch* on *base* in a fresh *clone* and return the new commit's short hash."""
     git = ["git", "-C", str(clone), "-c", "user.name=replaykit", "-c", "user.email=replaykit@example.invalid"]
-    steps = [("clone", ["git", "clone", "-q", "--no-hardlinks", "--no-checkout", str(repo), str(clone)], None),
-             ("checkout", [*git, "checkout", "-q", "--detach", base], None),
-             ("apply", [*git, "apply", "--check", "--recount", "-"], patch),
-             ("apply", [*git, "apply", "--recount", "-"], patch),
-             ("commit", [*git, "commit", "-q", "-a", "-m", "candidate patch"], None),
-             ("rev-parse", [*git, "rev-parse", "--short=7", "HEAD"], None)]
+    steps = [
+        ("clone", ["git", "clone", "-q", "--no-hardlinks", "--no-checkout", str(repo), str(clone)], None),
+        ("checkout", [*git, "checkout", "-q", "--detach", base], None),
+        ("apply", [*git, "apply", "--check", "--recount", "-"], patch),
+        ("apply", [*git, "apply", "--recount", "-"], patch),
+        ("commit", [*git, "commit", "-q", "-a", "-m", "candidate patch"], None),
+        ("rev-parse", [*git, "rev-parse", "--short=7", "HEAD"], None),
+    ]
     for name, args, stdin in steps:
         done = _run(args, clone.parent, GIT_ENV, stdin)
         if done is None or done.returncode:
@@ -147,8 +206,11 @@ def _apply(repo, base, patch, clone):
 def _timer(node):
     """Whether *node* names a helper that is given the clock: `db.query` or `Pool`."""
     return (isinstance(node, ast.Name) and node.id == "Pool") or (
-        isinstance(node, ast.Attribute) and node.attr == "query" and isinstance(node.value, ast.Name)
-        and node.value.id == "db")
+        isinstance(node, ast.Attribute)
+        and node.attr == "query"
+        and isinstance(node.value, ast.Name)
+        and node.value.id == "db"
+    )
 
 
 def _clocked(call):
@@ -165,8 +227,11 @@ def _clocked(call):
 
 def _stored(node, names):
     """Whether *node* assigns or deletes a name or attribute in *names*."""
-    return isinstance(node, (ast.Name, ast.Attribute)) and isinstance(node.ctx, (ast.Store, ast.Del)) and (
-        getattr(node, "id", None) in names or getattr(node, "attr", None) in names)
+    return (
+        isinstance(node, (ast.Name, ast.Attribute))
+        and isinstance(node.ctx, (ast.Store, ast.Del))
+        and (getattr(node, "id", None) in names or getattr(node, "attr", None) in names)
+    )
 
 
 def _flags(source):
@@ -182,8 +247,9 @@ def _flags(source):
             found["setting"] += 1
         elif isinstance(node, ast.Name) and (node.id in REACH or node.id.startswith("__")):
             found[node.id] += 1
-        elif isinstance(node, ast.Attribute) and (node.attr in REACH or node.attr in INTERNALS
-                                                  or node.attr.startswith("__")):
+        elif isinstance(node, ast.Attribute) and (
+            node.attr in REACH or node.attr in INTERNALS or node.attr.startswith("__")
+        ):
             found["." + node.attr] += 1
         elif isinstance(node, ast.Constant) and isinstance(node.value, str):
             found.update(word for word in SQL if word in node.value.upper())
@@ -192,8 +258,13 @@ def _flags(source):
 
 def _check_code(repo, base, clone, files):
     for path in files:
-        before = subprocess.run(["git", "--git-dir", str(Path(repo) / ".git"), "show", f"{base}:{path}"],
-                                capture_output=True, text=True, check=True, env=GIT_ENV).stdout
+        before = subprocess.run(
+            ["git", "--git-dir", str(Path(repo) / ".git"), "show", f"{base}:{path}"],
+            capture_output=True,
+            text=True,
+            check=True,
+            env=GIT_ENV,
+        ).stdout
         try:
             added = _flags((clone / path).read_text()) - _flags(before)
         except SyntaxError as exc:
@@ -220,33 +291,45 @@ def _result(done, keys):
 
 def protected_result(result, ids):
     """*result* if it is a complete run of the checks with these *ids* that names only them, else a failed one."""
-    if (result is None or result["run"] != len(ids) or not isinstance(result["failed"], list)
-            or not set(result["failed"]) <= ids or len(set(result["failed"])) != len(result["failed"])):
+    if (
+        result is None
+        or result["run"] != len(ids)
+        or not isinstance(result["failed"], list)
+        or not set(result["failed"]) <= ids
+        or len(set(result["failed"])) != len(result["failed"])
+    ):
         return {"run": 0, "failed": ["incomplete"]}
     return result
 
 
 def _protected(clone, checks, runner):
-    done = _job(runner, ["-I", str(runner.replaykit / PROTECTED / "run.py"), str(clone), *checks], clone.parent,
-                clone)
+    done = _job(runner, ["-I", str(runner.replaykit / PROTECTED / "run.py"), str(clone), *checks], clone.parent, clone)
     return protected_result(_result(done, ("run", "failed")), check_ids(runner.replaykit, checks))
 
 
 def replay_result(result):
     """*result* if each field has its type (page, clean: bool; pool_in_use_end: int or None; web_errors: int)."""
-    valid = (result is not None and all(type(result[k]) is bool for k in ("page", "clean"))
-             and (result["pool_in_use_end"] is None or type(result["pool_in_use_end"]) is int)
-             and type(result["web_errors"]) is int)
+    valid = (
+        result is not None
+        and all(type(result[k]) is bool for k in ("page", "clean"))
+        and (result["pool_in_use_end"] is None or type(result["pool_in_use_end"]) is int)
+        and type(result["web_errors"]) is int
+    )
     return result if valid else {"page": None, "pool_in_use_end": None, "web_errors": None, "clean": False}
 
 
 def _replay(clone, case, service, base, patched, runner):
-    deploys = [d | {"commit": patched} if (d["service"], d["commit"]) == (service, base) else d
-               for d in case["deploys"]]
+    deploys = [
+        d | {"commit": patched} if (d["service"], d["commit"]) == (service, base) else d for d in case["deploys"]
+    ]
     if deploys == case["deploys"]:
         deploys = [{"at_ms": 0, "service": service, "commit": patched}, *deploys]
-    done = _job(runner, ["-m", "replaykit.app.patch", str(clone), json.dumps(case | {"deploys": deploys})],
-                runner.replaykit, clone)
+    done = _job(
+        runner,
+        ["-m", "replaykit.app.patch", str(clone), json.dumps(case | {"deploys": deploys})],
+        runner.replaykit,
+        clone,
+    )
     return replay_result(_result(done, REPLAY_KEYS))
 
 
@@ -255,10 +338,15 @@ def replay_summary(repo, case):
     raw = incident.run_case(repo, case)
     usage = [g["value"] for g in raw["gauges"] if g["name"] == "db.client.connections.usage"]
     end = usage[-1] if usage else None
-    web_errors = sum(1 for s in raw["spans"] if s["service"] == "web" and s["kind"] == "server"
-                     and s["status"] == "ERROR")
-    return {"page": raw["page"] is not None, "pool_in_use_end": end, "web_errors": web_errors,
-            "clean": raw["page"] is None and end == 0}
+    web_errors = sum(
+        1 for s in raw["spans"] if s["service"] == "web" and s["kind"] == "server" and s["status"] == "ERROR"
+    )
+    return {
+        "page": raw["page"] is not None,
+        "pool_in_use_end": end,
+        "web_errors": web_errors,
+        "clean": raw["page"] is None and end == 0,
+    }
 
 
 def validate_patch(repo, case, decision, base, checks, runner):
@@ -292,15 +380,20 @@ def _with_git_headers(patch):
             while j and lines[j - 1].startswith("index "):
                 j -= 1
             if not (j and lines[j - 1].startswith("diff --git ")):
-                path = lines[i][len("--- a/"):]
+                path = lines[i][len("--- a/") :]
                 lines.insert(j, f"diff --git a/{path} b/{path}")
     return "\n".join(lines) + "\n"
 
 
 def verdict(result):
     """Whether a validation *result* passes: own tests, every protected check and a clean replay."""
-    return (result["own_tests"] == "pass" and result["protected"] is not None and not result["protected"]["failed"]
-            and result["replay"] is not None and result["replay"]["clean"])
+    return (
+        result["own_tests"] == "pass"
+        and result["protected"] is not None
+        and not result["protected"]["failed"]
+        and result["replay"] is not None
+        and result["replay"]["clean"]
+    )
 
 
 if __name__ == "__main__":

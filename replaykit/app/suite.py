@@ -17,8 +17,19 @@ from .bundle import bundle
 from .cases import CASES, case
 from .evaluate import score_app
 from .incident import run_case
-from .patch import GIT_ENV, REPLAY_KEYS, RESULT_KEYS, ROOT, _run, check_ids, check_patch, protected_result, \
-    replay_result, validate_patch, verdict
+from .patch import (
+    GIT_ENV,
+    REPLAY_KEYS,
+    RESULT_KEYS,
+    ROOT,
+    _run,
+    check_ids,
+    check_patch,
+    protected_result,
+    replay_result,
+    validate_patch,
+    verdict,
+)
 from .report import findings, summaries
 from .tools import CodeEvidence
 from .world import SERVICES
@@ -28,8 +39,19 @@ GIVEN = Path(__file__).resolve().parent / "investigator"
 COMMIT = re.compile(r"[0-9a-f]{40}")
 CASE_IDS = {spec["id"]: name for name, spec in CASES.items()}
 VALIDATION_KEYS = (*RESULT_KEYS, "inputs_sha256")
-RECORD_KEYS = ("decision", "outcome", "now", "turns", "tool_calls", "observed", "input_tokens", "output_tokens",
-               "cost_microusd", "latency_ms", "transcript")
+RECORD_KEYS = (
+    "decision",
+    "outcome",
+    "now",
+    "turns",
+    "tool_calls",
+    "observed",
+    "input_tokens",
+    "output_tokens",
+    "cost_microusd",
+    "latency_ms",
+    "transcript",
+)
 
 
 def _check_shape(suite):
@@ -44,11 +66,17 @@ def _check_shape(suite):
         raise ValueError("suite seeds must be a non-empty list of distinct ints")
     fields = list(Limits.__dataclass_fields__)
     limits = suite["limits"]
-    if not isinstance(limits, dict) or set(limits) != set(fields) or any(
-            not _is_int(limits[k]) or limits[k] <= 0 for k in fields):
+    if (
+        not isinstance(limits, dict)
+        or set(limits) != set(fields)
+        or any(not _is_int(limits[k]) or limits[k] <= 0 for k in fields)
+    ):
         raise ValueError(f"suite limits must be positive ints with exactly the keys {sorted(fields)}")
-    _validate_names(suite["investigators"], "investigators",
-                    lambda name: name in BASELINES or MODEL_NAME.fullmatch(name) is not None)
+    _validate_names(
+        suite["investigators"],
+        "investigators",
+        lambda name: name in BASELINES or MODEL_NAME.fullmatch(name) is not None,
+    )
     names = suite["cases"]
     if not isinstance(names, list) or not names or any(n not in CASES for n in names) or len(set(names)) != len(names):
         raise ValueError(f"suite cases must be distinct names from {sorted(CASES)}")
@@ -90,12 +118,18 @@ def _record(inv):
 
 def _meta(loaded):
     suite = loaded["suite"]
-    return {"suite_id": suite["id"], "suite_sha256": loaded["suite_sha256"], "shop_commit": suite["shop_commit"],
-            "replaykit_version": __version__, "cases": list(suite["cases"]), "seeds": list(suite["seeds"]),
-            "limits": dict(suite["limits"]),
-            "investigators": {n: "baseline" if n in BASELINES else "model" for n in sorted(suite["investigators"])},
-            "prompt_sha256": hashlib.sha256((GIVEN / "prompt.txt").read_bytes()).hexdigest(),
-            "schema_sha256": hashlib.sha256((GIVEN / "action.schema.json").read_bytes()).hexdigest()}
+    return {
+        "suite_id": suite["id"],
+        "suite_sha256": loaded["suite_sha256"],
+        "shop_commit": suite["shop_commit"],
+        "replaykit_version": __version__,
+        "cases": list(suite["cases"]),
+        "seeds": list(suite["seeds"]),
+        "limits": dict(suite["limits"]),
+        "investigators": {n: "baseline" if n in BASELINES else "model" for n in sorted(suite["investigators"])},
+        "prompt_sha256": hashlib.sha256((GIVEN / "prompt.txt").read_bytes()).hexdigest(),
+        "schema_sha256": hashlib.sha256((GIVEN / "action.schema.json").read_bytes()).hexdigest(),
+    }
 
 
 def investigate_app(loaded, repo, models):
@@ -110,9 +144,14 @@ def investigate_app(loaded, repo, models):
         for seed in meta["seeds"]:
             run = case(name, seed)
             incident = bundle(repo, run, run_case(repo, run))
-            results = {n: _record(baseline_investigation(incident, n) if kind == "baseline" else
-                                  investigate(incident, models[n], limits, CodeEvidence, parse_action))
-                       for n, kind in meta["investigators"].items()}
+            results = {
+                n: _record(
+                    baseline_investigation(incident, n)
+                    if kind == "baseline"
+                    else investigate(incident, models[n], limits, CodeEvidence, parse_action)
+                )
+                for n, kind in meta["investigators"].items()
+            }
             incidents.append({"id": incident.id, "deployed": incident.code["deployed"], "results": results})
     return {"meta": meta, "incidents": incidents}
 
@@ -127,8 +166,12 @@ def _case_of(incident_id):
 
 def _inputs_sha256(incident_id, decision, deployed):
     """What a validation ran on: the incident (so case and seed), the service, its deployed commit and the patch."""
-    inputs = {"incident": incident_id, "service": decision["service"], "base": deployed[decision["service"]],
-              "patch": decision["patch"]}
+    inputs = {
+        "incident": incident_id,
+        "service": decision["service"],
+        "base": deployed[decision["service"]],
+        "patch": decision["patch"],
+    }
     return hashlib.sha256(json.dumps(inputs, sort_keys=True).encode()).hexdigest()
 
 
@@ -143,9 +186,12 @@ def _deployed(case_name):
 
 def patches(report):
     """(incident id, investigator, decision, deployed commits) for every patch decision in *report*."""
-    return [(entry["id"], name, result["decision"], entry["deployed"]) for entry in report["incidents"]
-            for name, result in sorted(entry["results"].items())
-            if result["decision"] is not None and result["decision"]["act"] == "patch"]
+    return [
+        (entry["id"], name, result["decision"], entry["deployed"])
+        for entry in report["incidents"]
+        for name, result in sorted(entry["results"].items())
+        if result["decision"] is not None and result["decision"]["act"] == "patch"
+    ]
 
 
 def validate_app(report, repo, runner):
@@ -154,8 +200,9 @@ def validate_app(report, repo, runner):
     validations = {}
     for incident_id, name, decision, deployed in patches(report):
         case_name, seed = _case_of(incident_id)
-        result = validate_patch(repo, case(case_name, seed), decision, deployed[decision["service"]],
-                                CASES[case_name]["protected"], runner)
+        result = validate_patch(
+            repo, case(case_name, seed), decision, deployed[decision["service"]], CASES[case_name]["protected"], runner
+        )
         inputs = _inputs_sha256(incident_id, decision, deployed)
         validations.setdefault(incident_id, {})[name] = {**result, "inputs_sha256": inputs}
     return validations
@@ -173,17 +220,25 @@ def _check_report(report):
         if entry.get("deployed") != _deployed(_case_of(entry["id"])[0]):
             raise ValueError(f"incident {entry['id']} names other deployed commits than its case")
         results = entry.get("results")
-        if not isinstance(results, dict) or set(results) != set(meta["investigators"]) or not all(
-                map(_complete, results.values())):
+        if (
+            not isinstance(results, dict)
+            or set(results) != set(meta["investigators"])
+            or not all(map(_complete, results.values()))
+        ):
             raise ValueError(f"incident {entry['id']} must hold one complete record per investigator")
 
 
 def _complete(record):
-    return (isinstance(record, dict) and set(record) == set(RECORD_KEYS)
-            and (record["decision"] is None or isinstance(record["decision"], dict))
-            and isinstance(record["outcome"], str) and isinstance(record["observed"], list)
-            and all(isinstance(i, str) for i in record["observed"]) and isinstance(record["transcript"], list)
-            and _ints(*(record[k] for k in RECORD_KEYS if k not in ("decision", "outcome", "observed", "transcript"))))
+    return (
+        isinstance(record, dict)
+        and set(record) == set(RECORD_KEYS)
+        and (record["decision"] is None or isinstance(record["decision"], dict))
+        and isinstance(record["outcome"], str)
+        and isinstance(record["observed"], list)
+        and all(isinstance(i, str) for i in record["observed"])
+        and isinstance(record["transcript"], list)
+        and _ints(*(record[k] for k in RECORD_KEYS if k not in ("decision", "outcome", "observed", "transcript")))
+    )
 
 
 def _ints(*values):
@@ -201,15 +256,26 @@ def _replay_shaped(r):
 
 def _shaped(v, ids):
     """Whether *v* has the types of a `validate_patch` result for the checks *ids*, and its parts agree."""
-    if not (isinstance(v, dict) and set(v) == set(VALIDATION_KEYS) and isinstance(v["files"], list)
-            and all(isinstance(f, str) for f in v["files"]) and _ints(v["changed_lines"])
-            and isinstance(v["applies"], bool) and isinstance(v["valid"], bool)
-            and (v["error"] is None or isinstance(v["error"], str))
-            and v["own_tests"] in (None, "pass", "fail", "timeout")):
+    if not (
+        isinstance(v, dict)
+        and set(v) == set(VALIDATION_KEYS)
+        and isinstance(v["files"], list)
+        and all(isinstance(f, str) for f in v["files"])
+        and _ints(v["changed_lines"])
+        and isinstance(v["applies"], bool)
+        and isinstance(v["valid"], bool)
+        and (v["error"] is None or isinstance(v["error"], str))
+        and v["own_tests"] in (None, "pass", "fail", "timeout")
+    ):
         return False
     p, r = v["protected"], v["replay"]
-    protected = p is None or (isinstance(p, dict) and set(p) == {"run", "failed"} and _ints(p["run"])
-                              and isinstance(p["failed"], list) and protected_result(p, ids) == p)
+    protected = p is None or (
+        isinstance(p, dict)
+        and set(p) == {"run", "failed"}
+        and _ints(p["run"])
+        and isinstance(p["failed"], list)
+        and protected_result(p, ids) == p
+    )
     replay = r is None or _replay_shaped(r)
     runs = (v["own_tests"], p, r)
     ran = None not in runs if v["applies"] else runs == (None, None, None)
@@ -230,8 +296,10 @@ def _check_validation(v, incident_id, decision, deployed):
     case_name = _case_of(incident_id)[0]
     if not _shaped(v, check_ids(ROOT, CASES[case_name]["protected"])):
         raise ValueError("a validation does not have the shape of a patch validation")
-    if (v["inputs_sha256"] != _inputs_sha256(incident_id, decision, deployed)
-            or [v["files"], v["changed_lines"]] != _measured(decision)):
+    if v["inputs_sha256"] != _inputs_sha256(incident_id, decision, deployed) or [
+        v["files"],
+        v["changed_lines"],
+    ] != _measured(decision):
         raise ValueError("a validation is not of its decision's patch on its incident")
     if v["valid"] != (verdict(v) and v["applies"] and v["error"] is None):
         raise ValueError("a validation's verdict does not match its runs")
@@ -259,8 +327,11 @@ def score_app_report(report, validations):
         for name, record in entry["results"].items():
             fields = {k: frozenset(v) if k == "observed" else v for k, v in record.items()}
             validation = validations.get(entry["id"], {}).get(name)
-            results[name] = {**score_app(truth, Investigation(**fields), validation), "action": record["decision"],
-                             "validation": validation}
+            results[name] = {
+                **score_app(truth, Investigation(**fields), validation),
+                "action": record["decision"],
+                "validation": validation,
+            }
         incidents.append({"id": entry["id"], "expected": truth["expected"], "results": results})
     scored = {"meta": report["meta"], "incidents": incidents}
     scored["investigators"] = summaries(scored)
