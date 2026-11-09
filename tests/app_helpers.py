@@ -13,7 +13,7 @@ from replaykit.app.patch import LocalRunner
 from replaykit.investigate import Reply
 
 # The shop repository: $TRACEBENCH_SHOP, or a `tracebench-shop` clone next to this one.
-REPO = Path(os.environ.get("TRACEBENCH_SHOP", Path(__file__).resolve().parents[2] / "tracebench-shop"))
+REPO = Path(os.environ.get("TRACEBENCH_SHOP", Path(__file__).resolve().parents[2] / "tracebench-shop")).resolve()
 FIX = (Path(__file__).resolve().parents[1] / "replaykit" / "app" / "protected" / "leak.patch").read_text()
 needs_repo = unittest.skipUnless(REPO.exists(), "needs the shop app repository")
 RUNNER = LocalRunner()
