@@ -117,12 +117,3 @@ def score_investigation(incident, inv):
         "cost_microusd": inv.cost_microusd,
         "latency_ms": inv.latency_ms,
     }
-
-
-def brier(pairs):
-    """Mean squared error of confidences against outcomes; None when empty."""
-    pairs = list(pairs)
-    if not pairs:
-        return None
-    total = sum((confidence - (1.0 if correct else 0.0)) ** 2 for confidence, correct in pairs)
-    return round(total / len(pairs), 4)
