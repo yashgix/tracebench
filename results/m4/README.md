@@ -1,4 +1,4 @@
-# M4 run, 9 Nov 2026
+# The M4 run
 
 The 12-incident run behind the results in the main README. Checksums in `SHA256SUMS`.
 

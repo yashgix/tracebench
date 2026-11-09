@@ -11,7 +11,7 @@ work.
 The benchmark code is the `replaykit` package in this repository. The shop is
 [yashgix/tracebench-shop](https://github.com/yashgix/tracebench-shop).
 
-## Results (one run, 9 Nov 2026)
+## Results (one run)
 
 12 incidents (6 cases × 2 seeds), three low-cost models and two rule baselines, 220 model calls, $0.22 in total.
 
