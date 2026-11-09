@@ -1,0 +1,24 @@
+name: ci
+
+on: [push, pull_request]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: macos-latest  # the patch tests use macOS sandbox-exec
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: yashgix/tracebench-shop
+          path: tracebench-shop
+          fetch-depth: 0  # incidents check out the shop at older commits
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install ruff==0.17.4
+      - run: make lint
+      - run: make test SHOP=tracebench-shop
+      - run: make reproduce SHOP=tracebench-shop
