@@ -1,0 +1,22 @@
+{"type": "object", "additionalProperties": false,
+ "required": ["act", "calls", "service", "fault_type", "commit", "file", "function", "confidence", "evidence",
+              "summary", "patch"],
+ "properties": {
+  "act": {"type": "string", "enum": ["call", "diagnose", "patch", "escalate", "dismiss"]},
+  "calls": {"type": "array", "minItems": 0, "maxItems": 3,
+   "items": {"type": "object", "additionalProperties": false, "required": ["tool", "service", "arg"],
+    "properties": {
+     "tool": {"type": "string", "enum": ["topology", "overview", "alerts", "metrics", "logs", "deploys", "traces",
+                                         "commits", "diff", "source", "search"]},
+     "service": {"type": "string", "minLength": 1, "maxLength": 64},
+     "arg": {"type": "string", "minLength": 1, "maxLength": 120}}}},
+  "service": {"type": "string", "minLength": 1, "maxLength": 64},
+  "fault_type": {"type": "string", "enum": ["resource_leak", "config_error", "slow_query", "code_defect", "-"]},
+  "commit": {"type": "string", "minLength": 1, "maxLength": 40},
+  "file": {"type": "string", "minLength": 1, "maxLength": 120},
+  "function": {"type": "string", "minLength": 1, "maxLength": 120},
+  "confidence": {"type": "integer", "minimum": 0, "maximum": 100},
+  "evidence": {"type": "array", "minItems": 0, "maxItems": 8,
+   "items": {"type": "string", "minLength": 1, "maxLength": 64}},
+  "summary": {"type": "string", "minLength": 1, "maxLength": 400},
+  "patch": {"type": "string", "minLength": 0, "maxLength": 8000}}}

@@ -1,0 +1,20 @@
+{
+  "id": "shop",
+  "duration": 3600,
+  "services": ["edge", "web", "cart", "checkout", "payments", "inventory", "orders-db"],
+  "calls": {
+    "edge": ["web"],
+    "web": ["cart", "checkout"],
+    "cart": ["inventory"],
+    "checkout": ["inventory", "payments"],
+    "inventory": ["orders-db"],
+    "payments": ["orders-db"]
+  },
+  "events": [
+    {"id": "bg-1", "t": 60, "kind": "log", "service": "edge", "attrs": {"level": "info", "message": "tls certificates rotated"}},
+    {"id": "bg-2", "t": 900, "kind": "log", "service": "orders-db", "attrs": {"level": "info", "message": "autovacuum finished"}},
+    {"id": "bg-3", "t": 1500, "kind": "log", "service": "cart", "attrs": {"level": "warn", "message": "slow cache refill"}},
+    {"id": "bg-4", "t": 2700, "kind": "alert", "service": "orders-db", "attrs": {"rule": "disk_usage_high", "severity": "ticket"}},
+    {"id": "bg-5", "t": 3000, "kind": "log", "service": "payments", "attrs": {"level": "info", "message": "settlement batch done"}}
+  ]
+}

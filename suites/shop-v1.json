@@ -1,0 +1,18 @@
+{
+  "id": "shop-v1",
+  "scenario": "../fixtures/shop.json",
+  "scenario_sha256": "5eadb365c590bbb82b960217e8a83f57d17cd9165b128af409cc4df40dad3d46",
+  "seeds": [1, 2, 3],
+  "step": 60,
+  "agents": ["last_deploy", "threshold", "topology"],
+  "cases": [
+    {"type": "pool_exhaustion", "service": "inventory", "start": 1200, "cascade": true, "noise": {"decoy_deploy": true, "flapping_alerts": 6}},
+    {"type": "dependency_timeout", "service": "orders-db", "start": 900, "cascade": true, "noise": {"flapping_alerts": 4}},
+    {"type": "bad_deploy", "service": "checkout", "start": 1500, "noise": {"decoy_deploy": true}},
+    {"type": "config_error", "service": "payments", "start": 1800, "noise": {"decoy_deploy": true, "flapping_alerts": 3}},
+    {"type": "memory_leak", "service": "cart", "start": 600},
+    {"type": "pool_exhaustion", "service": "payments", "start": 2000},
+    {"type": "dependency_timeout", "service": "inventory", "start": 1000, "noise": {"decoy_deploy": true}},
+    {"type": "bad_deploy", "service": "web", "start": 2400, "noise": {"flapping_alerts": 8}}
+  ]
+}

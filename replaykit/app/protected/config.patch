@@ -1,0 +1,10 @@
+--- a/shop/config.py
++++ b/shop/config.py
+@@ -5,5 +5,5 @@
+ QUERY_MS = 4
+ POOL_REPORT_MS = 15000
+ CHECKOUT_LIMIT = 5
+-CHECKOUT_LIMIT_KEY = "sku"
+-CHECKOUT_LIMIT_WINDOW_MS = 60000
++CHECKOUT_LIMIT_KEY = "user"
++CHECKOUT_LIMIT_WINDOW_MS = 1000

@@ -1,0 +1,14 @@
+{
+  "id": "shop-app-v1",
+  "shop_commit": "bfc0fd22cdd817db534a247849ee28869bed6adf",
+  "seeds": [1, 2],
+  "limits": {"turns": 15, "tool_calls": 25, "tokens": 200000, "model_ms": 600000},
+  "investigators": [
+    "claude-haiku-5-5",
+    "deepseek-flash",
+    "gpt-6-luna",
+    "deepest_abnormal_commit",
+    "revert_last_deploy"
+  ],
+  "cases": ["leak", "config", "decoy", "slow_query", "outside_lock", "load_test"]
+}

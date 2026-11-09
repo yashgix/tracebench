@@ -1,0 +1,46 @@
+{
+  "id": "scn-example",
+  "duration": 1200,
+  "services": ["api", "db", "cache"],
+  "calls": {
+    "api": ["db"],
+    "db": ["cache"]
+  },
+  "events": [
+    {
+      "id": "ev-bg-1",
+      "t": 0,
+      "kind": "deploy",
+      "service": "api",
+      "attrs": {"version": "r0a1b2c"}
+    },
+    {
+      "id": "ev-bg-2",
+      "t": 0,
+      "kind": "metric",
+      "service": "api",
+      "attrs": {"name": "error_rate", "value": 0.01}
+    },
+    {
+      "id": "ev-bg-3",
+      "t": 30,
+      "kind": "log",
+      "service": "api",
+      "attrs": {"level": "info", "message": "startup complete"}
+    },
+    {
+      "id": "ev-bg-4",
+      "t": 180,
+      "kind": "log",
+      "service": "db",
+      "attrs": {"level": "warn", "message": "slow query"}
+    },
+    {
+      "id": "ev-bg-5",
+      "t": 600,
+      "kind": "alert",
+      "service": "cache",
+      "attrs": {"rule": "cache_evictions_high", "severity": "ticket"}
+    }
+  ]
+}

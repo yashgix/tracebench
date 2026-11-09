@@ -1,0 +1,18 @@
+{"type": "object", "additionalProperties": false,
+ "required": ["act", "calls", "service", "fault_type", "confidence", "evidence", "summary"],
+ "properties": {
+  "act": {"type": "string", "enum": ["call", "diagnose", "escalate", "dismiss"]},
+  "calls": {"type": "array", "minItems": 0, "maxItems": 3,
+   "items": {"type": "object", "additionalProperties": false, "required": ["tool", "service", "metric", "level"],
+    "properties": {
+     "tool": {"type": "string", "enum": ["topology", "overview", "alerts", "metrics", "logs", "deploys"]},
+     "service": {"type": "string", "minLength": 1, "maxLength": 64},
+     "metric": {"type": "string", "enum": ["error_rate", "latency_ms", "memory_mb", "-"]},
+     "level": {"type": "string", "enum": ["info", "warn", "error", "*"]}}}},
+  "service": {"type": "string", "minLength": 1, "maxLength": 64},
+  "fault_type": {"type": "string",
+   "enum": ["bad_deploy", "config_error", "dependency_timeout", "memory_leak", "pool_exhaustion", "-"]},
+  "confidence": {"type": "integer", "minimum": 0, "maximum": 100},
+  "evidence": {"type": "array", "minItems": 0, "maxItems": 8,
+   "items": {"type": "string", "minLength": 1, "maxLength": 16}},
+  "summary": {"type": "string", "minLength": 1, "maxLength": 400}}}
