@@ -17,7 +17,7 @@ from replaykit.app.patch import PROTECTED, ROOT, _apply, check_patch, validate_p
 
 FIXES = {name: (ROOT / "replaykit/app/protected" / f"{name}.patch").read_text()
          for name in ("config", "decoy", "slow_query")}
-# Codex's wrong fixes (chatgpt/85): a clock that drops the scan's cost, and per_user(5000).
+# Wrong fixes a reviewer tried: a clock that drops the scan's cost, and per_user(5000).
 QUERY = "return await db.query(self.runtime, connection, sql, params)"
 FAKE = ('return await db.query(type("Clock", (), {"sleep": lambda _, ms: self.runtime.sleep(config.QUERY_MS)})(), '
         'connection, sql, params)')
@@ -183,7 +183,7 @@ class CasePatchTest(unittest.TestCase):
                 self.assertEqual(json.loads(done.stdout), {"run": 5, "failed": [INDEX_CHECK]})
 
     def test_a_range_lookup_that_walks_the_catalogue_is_caught(self):
-        # Codex's wrong fixes (chatgpt/91): the plan says SEARCH, yet SQLite steps through every product.
+        # Wrong fixes a reviewer tried: the plan says SEARCH, yet SQLite steps through every product.
         for bound in ("''", "'sku-'"):
             wrong = edit(cases.ANY_CASE, "shop/inventory.py", LOOKUP,
                          LOOKUP.replace("WHERE lower(sku)", f"WHERE sku >= {bound} AND lower(sku)"))
@@ -215,7 +215,7 @@ class CasePatchTest(unittest.TestCase):
                 self.assertEqual(outcome["protected"]["failed"], expected)
 
     def test_a_stale_cache_is_caught(self):
-        # Codex's (chatgpt/94): each entry dropped after one second, so reads seconds apart look fresh.
+        # A reviewer's wrong fix: each entry dropped after one second, so reads seconds apart look fresh.
         expire = " " * 20 + "self.runtime.spawn(self.forget(sku.lower()))\n"
 
         def kept_for(ms):
@@ -231,7 +231,7 @@ class CasePatchTest(unittest.TestCase):
         tries = {"kept for ever": (*KNOWN, LOOKUP, CACHE_READ + CACHE_ROWS),
                  "kept for a second": kept_for(1000),
                  "kept for 50 ms": kept_for(50),  # the reviewer agent's: gone before reads 60 ms later
-                 # Codex's (chatgpt/96): kept under the code as asked, so `SKU-007` outlives a reservation of
+                 # A reviewer's wrong fix: kept under the code as asked, so `SKU-007` outlives a reservation of
                  # `sku-007`; dropped before the update, so a read overlapping the reservation keeps the old stock.
                  "kept under the code as asked": (*KNOWN, LOOKUP, as_asked(CACHE_READ + CACHE_ROWS),
                                                   UPDATE, UPDATE + as_asked(CACHE_DROP)),
@@ -239,7 +239,7 @@ class CasePatchTest(unittest.TestCase):
                                                RESERVE_READ, CACHE_DROP + RESERVE_READ),
                  # Read before the update, stored after the drop: caught only when no read filled the cache first.
                  "stored late": (*KNOWN, LOOKUP, stored_late + CACHE_ROWS, UPDATE, UPDATE + CACHE_DROP),
-                 # Codex's (chatgpt/97): two overlapping reservations both read 8 and both store 5; the database has 2.
+                 # A reviewer's wrong fix: two overlapping reservations both read 8 and both store 5; the database has 2.
                  "set after the update": (*KNOWN, LOOKUP, CACHE_READ + CACHE_ROWS, UPDATE, UPDATE + " " * 16
                                           + "self.known[sku.lower()] = [(stock - quantity,)]\n")}
         for name, pairs in tries.items():
@@ -272,7 +272,7 @@ class CasePatchTest(unittest.TestCase):
                                      'EXISTS item_lower ON items(lower(sku))", ())\n' + ' ' * 16 + LOOKUP),
                  "a cache dropped after the update": (*KNOWN, LOOKUP, CACHE_READ + CACHE_ROWS,
                                                       UPDATE, UPDATE + CACHE_DROP),
-                 # Codex's (chatgpt/97): slow, but finished well inside 50 ms.
+                 # A reviewer's wrong fix: slow, but finished well inside 50 ms.
                  "a lookup that waits 25 ms": (LOOKUP, "await self.runtime.sleep(25)\n" + " " * 16 + exact)}
         for name, pairs in fixes.items():
             with self.subTest(name=name):

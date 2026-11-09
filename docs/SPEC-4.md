@@ -4,7 +4,7 @@ Extends SPEC-3 (the bounded loop, limits, evidence rule); M3 suites and reports 
 offline: the app runs on a simulated clock, the database is SQLite in memory, and no network is used.
 
 ## B1. The app and its history
-- `~/Projects/deeptrace-shopapp`: three services (`web` → `orders` → `inventory`, `web` → `inventory`), a bounded
+- The shop (repository `tracebench-shop`): three services (`web` → `orders` → `inventory`, `web` → `inventory`), a bounded
   connection pool over SQLite, OpenTelemetry-shaped spans, logs and gauges. `shop/runtime.py`, `shop/telemetry.py` and
   `shop/pool.py` are the measuring instruments: a patch may not change them.
 - The history is one `main` line built by `make_history.py` (fixed authors and dates, so the same hashes every build).
@@ -71,8 +71,8 @@ Incident ids are opaque (`shop-app:c<N>:<seed>`), so neither ids nor run descrip
   first at any offset from 4 ms before to 8 ms after its start, with or without a read first (finished before the
   reservations start), and with or without the reads right after). Reference fixes:
   `protected/<case>.patch`.
-- **Boundary:** the patched code runs only inside those three runs. For any model-written patch they run as the
-  `_arcexec` account through the coordinator's existing `sandbox.run` (Seatbelt, no network, the home folder hidden,
+- **Boundary:** the patched code runs only inside those three runs. For any model-written patch they run as a
+  separate macOS account with no keys, through a sandbox runner (Seatbelt, no network, the home folder hidden,
   reads limited to the clone, replaykit and the interpreter, writes only to a scratch folder). The trusted side
   builds the clone, reads only each run's stdout file and accepts only an exact result: the expected keys and types,
   and failed checks named only by real check ids of that run's list. Each job gets its own fresh scratch folder and
@@ -107,7 +107,7 @@ escalation or dismissal needs no evidence, so an "always escalate" stub resolves
 - Patch validation is the trusted side's: `validate_app(report, repo, runner)` runs `validate_patch` for every
   `patch` decision of the verifier's investigation, giving {incident id: {investigator: result plus the patch's
   sha256}}. Tests and
-  rehearsals pass `LocalRunner`; model patches only the `_arcexec` runner.
+  rehearsals pass `LocalRunner`; model patches only the separate-account runner.
 - `replaykit score-app INVESTIGATION --validations PATH --out PATH [--md PATH]`: refuses an investigation that is not
   exactly its suite's cases × seeds with one complete record per investigator, and validations that do not cover
   exactly its patch decisions, are not of that patch on that incident and deployed commit (a hash of

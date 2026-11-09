@@ -121,7 +121,7 @@ class AppPipelineTest(unittest.TestCase):
                 score_app_report(self.report, changed(edit))
 
     def test_a_validation_belongs_to_its_incident(self):
-        # As in Codex's control (chatgpt/94): a genuine validation moved, with its patch, to another incident whose
+        # As in a reviewer's control: a genuine validation moved, with its patch, to another incident whose
         # case runs the same checks (c4 and c5 both run all four).
         validations = copy.deepcopy(self.validations)
         report = copy.deepcopy(self.report)

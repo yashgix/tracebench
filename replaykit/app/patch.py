@@ -113,7 +113,7 @@ def _run(args, cwd, env=None, stdin=None):
 
 class LocalRunner:
     """Runs patched code as this user under sandbox-exec: no network, no writes outside the job's folder. For tests and
-    scripted rehearsals; a model's patch runs through a runner for the _arcexec account instead."""
+    scripted rehearsals; a model's patch runs through a runner for a separate account with no keys instead."""
 
     root = None  # where job folders are made (None: the system's temporary folder)
     replaykit = ROOT  # the replaykit tree whose protected checks and replay the jobs run
