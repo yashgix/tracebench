@@ -1,0 +1,180 @@
+{
+  "shop-app:c1:1": {
+    "claude-haiku-5-5": {
+      "applies": true,
+      "changed_lines": 14,
+      "error": null,
+      "files": [
+        "shop/inventory.py"
+      ],
+      "inputs_sha256": "18ab94f16187d6f0e944182b06fc6374635f35b8c25199806d1ba0294cedbf4e",
+      "own_tests": "pass",
+      "protected": {
+        "failed": [],
+        "run": 5
+      },
+      "replay": {
+        "clean": true,
+        "page": false,
+        "pool_in_use_end": 0,
+        "web_errors": 0
+      },
+      "valid": true
+    },
+    "gpt-6-luna": {
+      "applies": true,
+      "changed_lines": 14,
+      "error": null,
+      "files": [
+        "shop/inventory.py"
+      ],
+      "inputs_sha256": "f8d1faacbbb02d25213ffbd4b0261729f73572dc9ffb355bff94580e9a36059d",
+      "own_tests": "pass",
+      "protected": {
+        "failed": [],
+        "run": 5
+      },
+      "replay": {
+        "clean": true,
+        "page": false,
+        "pool_in_use_end": 0,
+        "web_errors": 0
+      },
+      "valid": true
+    }
+  },
+  "shop-app:c1:2": {
+    "claude-haiku-5-5": {
+      "applies": true,
+      "changed_lines": 14,
+      "error": null,
+      "files": [
+        "shop/inventory.py"
+      ],
+      "inputs_sha256": "a81098ba58c1b1334e31bd42f831810cec6b191ce74ed34aa090d6a9eef11415",
+      "own_tests": "pass",
+      "protected": {
+        "failed": [],
+        "run": 5
+      },
+      "replay": {
+        "clean": true,
+        "page": false,
+        "pool_in_use_end": 0,
+        "web_errors": 0
+      },
+      "valid": true
+    },
+    "deepseek-flash": {
+      "applies": true,
+      "changed_lines": 14,
+      "error": null,
+      "files": [
+        "shop/inventory.py"
+      ],
+      "inputs_sha256": "3d047a607e92ed986e605e8d42fb53c6bfefb8cb57087a573fda7694d3de8c09",
+      "own_tests": "pass",
+      "protected": {
+        "failed": [],
+        "run": 5
+      },
+      "replay": {
+        "clean": true,
+        "page": false,
+        "pool_in_use_end": 0,
+        "web_errors": 0
+      },
+      "valid": true
+    },
+    "gpt-6-luna": {
+      "applies": true,
+      "changed_lines": 14,
+      "error": null,
+      "files": [
+        "shop/inventory.py"
+      ],
+      "inputs_sha256": "0a351eb21d214d4279dd8aad8ed96fd75a8d203c54af373f06f3362061cc7e91",
+      "own_tests": "pass",
+      "protected": {
+        "failed": [],
+        "run": 5
+      },
+      "replay": {
+        "clean": true,
+        "page": false,
+        "pool_in_use_end": 0,
+        "web_errors": 0
+      },
+      "valid": true
+    }
+  },
+  "shop-app:c3:1": {
+    "gpt-6-luna": {
+      "applies": true,
+      "changed_lines": 2,
+      "error": null,
+      "files": [
+        "shop/orders.py"
+      ],
+      "inputs_sha256": "c9014e9fd8a50440141079c2dae769b465d2954e27a261f3c9c167e6ea1dc4d4",
+      "own_tests": "pass",
+      "protected": {
+        "failed": [],
+        "run": 10
+      },
+      "replay": {
+        "clean": true,
+        "page": false,
+        "pool_in_use_end": 0,
+        "web_errors": 0
+      },
+      "valid": true
+    }
+  },
+  "shop-app:c3:2": {
+    "claude-haiku-5-5": {
+      "applies": true,
+      "changed_lines": 2,
+      "error": null,
+      "files": [
+        "shop/orders.py"
+      ],
+      "inputs_sha256": "1eb2132e976bc1496b6b40db7329cdaaa89087977191accfe661c387008842a6",
+      "own_tests": "pass",
+      "protected": {
+        "failed": [],
+        "run": 10
+      },
+      "replay": {
+        "clean": true,
+        "page": false,
+        "pool_in_use_end": 0,
+        "web_errors": 0
+      },
+      "valid": true
+    }
+  },
+  "shop-app:c4:2": {
+    "deepseek-flash": {
+      "applies": true,
+      "changed_lines": 2,
+      "error": null,
+      "files": [
+        "shop/inventory.py"
+      ],
+      "inputs_sha256": "beb43c2d77d25d1c66938973d949f9a8bf925ff7ef21558fc7bed9f04da65e99",
+      "own_tests": "pass",
+      "protected": {
+        "failed": [],
+        "run": 15
+      },
+      "replay": {
+        "clean": true,
+        "page": false,
+        "pool_in_use_end": 0,
+        "web_errors": 0
+      },
+      "valid": true
+    }
+  }
+}

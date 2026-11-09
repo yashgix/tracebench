@@ -1,0 +1,23 @@
+--- a/shop/inventory.py
++++ b/shop/inventory.py
+@@ -24,10 +24,13 @@ class Inventory:
+     async def reserve(self, sku, quantity):
+         with self.telemetry.span(SERVICE, "POST /reserve", sku=sku, quantity=quantity):
+             connection = await self._connection()
+-            stock = await self._read_stock(connection, sku)
+-            self._check_available(sku, stock, quantity)
+-            connection.execute("UPDATE items SET stock = stock - ? WHERE sku = ?", (quantity, sku))
+-            await self.runtime.sleep(config.QUERY_MS)
+-            self.pool.release(connection)
+-            return stock - quantity
++            try:
++                stock = await self._read_stock(connection, sku)
++                self._check_available(sku, stock, quantity)
++                connection.execute("UPDATE items SET stock = stock - ? WHERE sku = ?", (quantity, sku))
++                await self.runtime.sleep(config.QUERY_MS)
++                return stock - quantity
++            finally:
++                self.pool.release(connection)
+ 
+     @staticmethod
+     def _check_available(sku, stock, quantity):

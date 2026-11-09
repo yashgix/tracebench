@@ -1,0 +1,2911 @@
+{
+  "findings": [
+    "Most resolved: claude-haiku-5-5, 5 of 12.",
+    "Cheapest per resolved incident: gpt-6-luna, $0.0057.",
+    "claude-haiku-5-5: root cause 8 of 8, valid fix 2 of 8, 7 patches proposed.",
+    "deepest_abnormal_commit: root cause 8 of 8, valid fix 0 of 8, 0 patches proposed.",
+    "deepseek-flash: root cause 6 of 8, valid fix 5 of 8, 6 patches proposed.",
+    "gpt-6-luna: root cause 7 of 8, valid fix 3 of 8, 8 patches proposed.",
+    "revert_last_deploy: root cause 6 of 8, valid fix 4 of 8, 8 patches proposed.",
+    "gpt-6-luna proposed a patch in 2 incidents that needed none.",
+    "claude-haiku-5-5 escalated 1 incidents it should have handled.",
+    "revert_last_deploy escalated 2 incidents it should have handled.",
+    "gpt-6-luna cited evidence it had not seen in 1 incidents.",
+    "deepseek-flash got no answer from its model in 3 incidents (lane stopped or error)."
+  ],
+  "incidents": [
+    {
+      "expected": "patch",
+      "id": "shop-app:c1:1",
+      "results": {
+        "claude-haiku-5-5": {
+          "action": {
+            "act": "patch",
+            "calls": [],
+            "commit": "ee7027c",
+            "confidence": 90,
+            "evidence": [
+              "ev-0186",
+              "ev-0823",
+              "ev-0843",
+              "ev-0841"
+            ],
+            "fault_type": "resource_leak",
+            "file": "shop/inventory.py",
+            "function": "Inventory.reserve",
+            "patch": "--- a/shop/inventory.py\n+++ b/shop/inventory.py\n@@ -26,7 +26,10 @@\n             connection = await self._connection()\n-            stock = await self._read_stock(connection, sku)\n-            self._check_available(sku, stock, quantity)\n-            connection.execute(\"UPDATE items SET stock = stock - ? WHERE sku = ?\", (quantity, sku))\n-            await self.runtime.sleep(config.QUERY_MS)\n-            self.pool.release(connection)\n-            return stock - quantity\n+            try:\n+                stock = await self._read_stock(connection, sku)\n+                self._check_available(sku, stock, quantity)\n+                connection.execute(\"UPDATE items SET stock = stock - ? WHERE sku = ?\", (quantity, sku))\n+                await self.runtime.sleep(config.QUERY_MS)\n+                return stock - quantity\n+            finally:\n+                self.pool.release(connection)\n",
+            "service": "inventory",
+            "summary": "Commit ee7027c removed the try/finally around the connection in inventory reserve, so out-of-stock errors leak pool connections; inventory pool hits 5/5 and orders and web fail with 503 from then on."
+          },
+          "cost_microusd": 2740,
+          "decision": "patch",
+          "decision_correct": true,
+          "evidence_valid": true,
+          "expected": "patch",
+          "latency_ms": 13261,
+          "location_correct": true,
+          "outcome": "decided",
+          "patch_valid": false,
+          "resolved": false,
+          "root_cause_correct": true,
+          "tokens": 15527,
+          "tool_calls": 6,
+          "turns": 3,
+          "validation": {
+            "applies": false,
+            "changed_lines": 14,
+            "error": "git apply failed: error: patch failed: shop/inventory.py:26\nerror: shop/inventory.py: patch does not apply",
+            "files": [
+              "shop/inventory.py"
+            ],
+            "inputs_sha256": "1ca80d6d7d85993680b1cb3c4146c25f033214bbd65901e4c25966a756363a75",
+            "own_tests": null,
+            "protected": null,
+            "replay": null,
+            "valid": false
+          }
+        },
+        "deepest_abnormal_commit": {
+          "action": {
+            "act": "diagnose",
+            "calls": [],
+            "commit": "ee7027c",
+            "confidence": 50,
+            "evidence": [
+              "ev-0209",
+              "ev-0220",
+              "ev-0223",
+              "ev-0226",
+              "ev-0229",
+              "ev-0232",
+              "ev-0235",
+              "ev-0237"
+            ],
+            "fault_type": "resource_leak",
+            "file": "shop/inventory.py",
+            "function": "-",
+            "patch": "",
+            "service": "inventory",
+            "summary": "rule baseline"
+          },
+          "cost_microusd": 0,
+          "decision": "diagnose",
+          "decision_correct": false,
+          "evidence_valid": true,
+          "expected": "patch",
+          "latency_ms": 0,
+          "location_correct": false,
+          "outcome": "decided",
+          "patch_valid": false,
+          "resolved": false,
+          "root_cause_correct": true,
+          "tokens": 0,
+          "tool_calls": 0,
+          "turns": 0,
+          "validation": null
+        },
+        "deepseek-flash": {
+          "action": null,
+          "cost_microusd": 2618,
+          "decision": null,
+          "decision_correct": false,
+          "evidence_valid": false,
+          "expected": "patch",
+          "latency_ms": 12571,
+          "location_correct": false,
+          "outcome": "invalid_output",
+          "patch_valid": false,
+          "resolved": false,
+          "root_cause_correct": false,
+          "tokens": 16530,
+          "tool_calls": 9,
+          "turns": 5,
+          "validation": null
+        },
+        "gpt-6-luna": {
+          "action": {
+            "act": "patch",
+            "calls": [],
+            "commit": "ee7027c",
+            "confidence": 100,
+            "evidence": [
+              "ee7027c",
+              "ev-0843",
+              "ev-0845",
+              "ev-0784",
+              "shop/inventory.py"
+            ],
+            "fault_type": "resource_leak",
+            "file": "shop/inventory.py",
+            "function": "Inventory.reserve",
+            "patch": "--- a/shop/inventory.py\n+++ b/shop/inventory.py\n@@ -24,12 +24,14 @@ class Inventory:\n     async def reserve(self, sku, quantity):\n         with self.telemetry.span(SERVICE, \"POST /reserve\", sku=sku, quantity=quantity):\n             connection = await self._connection()\n-            stock = await self._read_stock(connection, sku)\n-            self._check_available(sku, stock, quantity)\n-            connection.execute(\"UPDATE items SET stock = stock - ? WHERE sku = ?\", (quantity, sku))\n-            await self.runtime.sleep(config.QUERY_MS)\n-            self.pool.release(connection)\n-            return stock - quantity\n+            try:\n+                stock = await self._read_stock(connection, sku)\n+                self._check_available(sku, stock, quantity)\n+                connection.execute(\"UPDATE items SET stock = stock - ? WHERE sku = ?\", (quantity, sku))\n+                await self.runtime.sleep(config.QUERY_MS)\n+                return stock - quantity\n+            finally:\n+                self.pool.release(connection)\n",
+            "service": "inventory",
+            "summary": "The inventory reserve path leaks acquired pool connections when stock checks or reads fail, exhausting the pool and cascading errors to orders and web."
+          },
+          "cost_microusd": 1417,
+          "decision": "patch",
+          "decision_correct": true,
+          "evidence_valid": true,
+          "expected": "patch",
+          "latency_ms": 13843,
+          "location_correct": true,
+          "outcome": "decided",
+          "patch_valid": false,
+          "resolved": false,
+          "root_cause_correct": true,
+          "tokens": 15422,
+          "tool_calls": 12,
+          "turns": 5,
+          "validation": {
+            "applies": false,
+            "changed_lines": 14,
+            "error": "git apply failed: error: patch failed: shop/inventory.py:24\nerror: shop/inventory.py: patch does not apply",
+            "files": [
+              "shop/inventory.py"
+            ],
+            "inputs_sha256": "7694ac1b75817443bf244034c014896e9cabdffa93296133d72682668a1a21ae",
+            "own_tests": null,
+            "protected": null,
+            "replay": null,
+            "valid": false
+          }
+        },
+        "revert_last_deploy": {
+          "action": {
+            "act": "patch",
+            "calls": [],
+            "commit": "ee7027c",
+            "confidence": 50,
+            "evidence": [
+              "ev-0186",
+              "ev-0209",
+              "ev-0220",
+              "ev-0223",
+              "ev-0226",
+              "ev-0229",
+              "ev-0232",
+              "ev-0235"
+            ],
+            "fault_type": "resource_leak",
+            "file": "shop/inventory.py",
+            "function": "-",
+            "patch": "diff --git a/shop/inventory.py b/shop/inventory.py\nindex 5721ca8..f7b7cca 100644\n--- a/shop/inventory.py\n+++ b/shop/inventory.py\n@@ -24,17 +24,15 @@ class Inventory:\n     async def reserve(self, sku, quantity):\n         with self.telemetry.span(SERVICE, \"POST /reserve\", sku=sku, quantity=quantity):\n             connection = await self._connection()\n+            try:\n+                stock = await self._read_stock(connection, sku)\n+                if stock < quantity:\n+                    raise ServiceError(409, f\"out of stock: {sku}\")\n+                connection.execute(\"UPDATE items SET stock = stock - ? WHERE sku = ?\", (quantity, sku))\n+                await self.runtime.sleep(config.QUERY_MS)\n+                return stock - quantity\n+            finally:\n+                self.pool.release(connection)\n-            stock = await self._read_stock(connection, sku)\n-            self._check_available(sku, stock, quantity)\n-            connection.execute(\"UPDATE items SET stock = stock - ? WHERE sku = ?\", (quantity, sku))\n-            await self.runtime.sleep(config.QUERY_MS)\n-            self.pool.release(connection)\n-            return stock - quantity\n-\n-    @staticmethod\n-    def _check_available(sku, stock, quantity):\n-        if stock < quantity:\n-            raise ServiceError(409, f\"out of stock: {sku}\")\n \n     async def report_pool(self):\n         while self.running:\n",
+            "service": "inventory",
+            "summary": "rule baseline"
+          },
+          "cost_microusd": 0,
+          "decision": "patch",
+          "decision_correct": true,
+          "evidence_valid": true,
+          "expected": "patch",
+          "latency_ms": 0,
+          "location_correct": false,
+          "outcome": "decided",
+          "patch_valid": true,
+          "resolved": false,
+          "root_cause_correct": true,
+          "tokens": 0,
+          "tool_calls": 0,
+          "turns": 0,
+          "validation": {
+            "applies": true,
+            "changed_lines": 20,
+            "error": null,
+            "files": [
+              "shop/inventory.py"
+            ],
+            "inputs_sha256": "f44e10467145efee58b2a12ca1daf4143f60dcddf5d7c1530f7e11bf8c71a527",
+            "own_tests": "pass",
+            "protected": {
+              "failed": [],
+              "run": 5
+            },
+            "replay": {
+              "clean": true,
+              "page": false,
+              "pool_in_use_end": 0,
+              "web_errors": 0
+            },
+            "valid": true
+          }
+        }
+      }
+    },
+    {
+      "expected": "patch",
+      "id": "shop-app:c1:2",
+      "results": {
+        "claude-haiku-5-5": {
+          "action": {
+            "act": "patch",
+            "calls": [],
+            "commit": "ee7027c",
+            "confidence": 90,
+            "evidence": [
+              "ev-0181",
+              "ev-0713",
+              "ev-0715",
+              "7adb1b51e4000b8c15f85c8f02dd59ac"
+            ],
+            "fault_type": "resource_leak",
+            "file": "shop/inventory.py",
+            "function": "Inventory.reserve",
+            "patch": "--- a/shop/inventory.py\n+++ b/shop/inventory.py\n@@ -24,9 +24,11 @@ class Inventory:\n     async def reserve(self, sku, quantity):\n         with self.telemetry.span(SERVICE, \"POST /reserve\", sku=sku, quantity=quantity):\n             connection = await self._connection()\n-            stock = await self._read_stock(connection, sku)\n-            self._check_available(sku, stock, quantity)\n-            connection.execute(\"UPDATE items SET stock = stock - ? WHERE sku = ?\", (quantity, sku))\n-            await self.runtime.sleep(config.QUERY_MS)\n-            self.pool.release(connection)\n-            return stock - quantity\n+            try:\n+                stock = await self._read_stock(connection, sku)\n+                self._check_available(sku, stock, quantity)\n+                connection.execute(\"UPDATE items SET stock = stock - ? WHERE sku = ?\", (quantity, sku))\n+                await self.runtime.sleep(config.QUERY_MS)\n+                return stock - quantity\n+            finally:\n+                self.pool.release(connection)\n",
+            "service": "inventory",
+            "summary": "Commit ee7027c moved the pool release out of a finally block in Inventory.reserve. Out-of-stock errors and early exits now leak pool connections, so inventory connection usage climbs to its limit, requests wait 2s for a connection and fail with 503, and web error rate rises. The patch restores try/finally around the connection.','sub':''}"
+          },
+          "cost_microusd": 3416,
+          "decision": "patch",
+          "decision_correct": true,
+          "evidence_valid": true,
+          "expected": "patch",
+          "latency_ms": 16934,
+          "location_correct": true,
+          "outcome": "decided",
+          "patch_valid": false,
+          "resolved": false,
+          "root_cause_correct": true,
+          "tokens": 21044,
+          "tool_calls": 9,
+          "turns": 4,
+          "validation": {
+            "applies": false,
+            "changed_lines": 14,
+            "error": "git apply failed: error: patch failed: shop/inventory.py:24\nerror: shop/inventory.py: patch does not apply",
+            "files": [
+              "shop/inventory.py"
+            ],
+            "inputs_sha256": "a0643a38d9b5d50bd5783a6cf1e6aa9047e9c143ad04b40b68797dafe31d76fa",
+            "own_tests": null,
+            "protected": null,
+            "replay": null,
+            "valid": false
+          }
+        },
+        "deepest_abnormal_commit": {
+          "action": {
+            "act": "diagnose",
+            "calls": [],
+            "commit": "ee7027c",
+            "confidence": 50,
+            "evidence": [
+              "ev-0205",
+              "ev-0217",
+              "ev-0220",
+              "ev-0222",
+              "ev-0225",
+              "ev-0227",
+              "ev-0230",
+              "ev-0233"
+            ],
+            "fault_type": "resource_leak",
+            "file": "shop/inventory.py",
+            "function": "-",
+            "patch": "",
+            "service": "inventory",
+            "summary": "rule baseline"
+          },
+          "cost_microusd": 0,
+          "decision": "diagnose",
+          "decision_correct": false,
+          "evidence_valid": true,
+          "expected": "patch",
+          "latency_ms": 0,
+          "location_correct": false,
+          "outcome": "decided",
+          "patch_valid": false,
+          "resolved": false,
+          "root_cause_correct": true,
+          "tokens": 0,
+          "tool_calls": 0,
+          "turns": 0,
+          "validation": null
+        },
+        "deepseek-flash": {
+          "action": {
+            "act": "patch",
+            "calls": [],
+            "commit": "ee7027c",
+            "confidence": 92,
+            "evidence": [
+              "ee7027c",
+              "ev-0655",
+              "ev-0714",
+              "ev-0715",
+              "7adb1b51e4000b8c15f85c8f02dd59ac",
+              "a0064d17ec8af836"
+            ],
+            "fault_type": "resource_leak",
+            "file": "shop/inventory.py",
+            "function": "Inventory.reserve",
+            "patch": "--- a/shop/inventory.py\n+++ b/shop/inventory.py\n@@ -24,10 +24,13 @@ class Inventory:\n     async def reserve(self, sku, quantity):\n         with self.telemetry.span(SERVICE, \"POST /reserve\", sku=sku, quantity=quantity):\n             connection = await self._connection()\n-            stock = await self._read_stock(connection, sku)\n-            self._check_available(sku, stock, quantity)\n-            connection.execute(\"UPDATE items SET stock = stock - ? WHERE sku = ?\", (quantity, sku))\n-            await self.runtime.sleep(config.QUERY_MS)\n-            self.pool.release(connection)\n-            return stock - quantity\n+            try:\n+                stock = await self._read_stock(connection, sku)\n+                self._check_available(sku, stock, quantity)\n+                connection.execute(\"UPDATE items SET stock = stock - ? WHERE sku = ?\", (quantity, sku))\n+                await self.runtime.sleep(config.QUERY_MS)\n+                return stock - quantity\n+            finally:\n+                self.pool.release(connection)\n",
+            "service": "inventory",
+            "summary": "Commit ee7027c removed the try/finally around reserve(), so a 409 out-of-stock ServiceError (or any error after acquire) leaks the pool connection; the pool fills to 5/5, every later reserve times out after 2000 ms and the error cascades up through orders to web."
+          },
+          "cost_microusd": 4703,
+          "decision": "patch",
+          "decision_correct": true,
+          "evidence_valid": true,
+          "expected": "patch",
+          "latency_ms": 18132,
+          "location_correct": true,
+          "outcome": "decided",
+          "patch_valid": false,
+          "resolved": false,
+          "root_cause_correct": true,
+          "tokens": 21102,
+          "tool_calls": 8,
+          "turns": 5,
+          "validation": {
+            "applies": false,
+            "changed_lines": 14,
+            "error": "git apply failed: error: patch failed: shop/inventory.py:24\nerror: shop/inventory.py: patch does not apply",
+            "files": [
+              "shop/inventory.py"
+            ],
+            "inputs_sha256": "a9beb23724494ad511d1fd4d8861430223fc9682e357e330a1cbfd45e1f08498",
+            "own_tests": null,
+            "protected": null,
+            "replay": null,
+            "valid": false
+          }
+        },
+        "gpt-6-luna": {
+          "action": {
+            "act": "patch",
+            "calls": [],
+            "commit": "ee7027c",
+            "confidence": 100,
+            "evidence": [
+              "ev-0715",
+              "ev-0655",
+              "7adb1b51e4000b8c15f85c8f02dd59ac",
+              "shop/inventory.py"
+            ],
+            "fault_type": "resource_leak",
+            "file": "shop/inventory.py",
+            "function": "Inventory.reserve",
+            "patch": "--- a/shop/inventory.py\n+++ b/shop/inventory.py\n@@ -24,12 +24,14 @@ class Inventory:\n     async def reserve(self, sku, quantity):\n         with self.telemetry.span(SERVICE, \"POST /reserve\", sku=sku, quantity=quantity):\n             connection = await self._connection()\n-            stock = await self._read_stock(connection, sku)\n-            self._check_available(sku, stock, quantity)\n-            connection.execute(\"UPDATE items SET stock = stock - ? WHERE sku = ?\", (quantity, sku))\n-            await self.runtime.sleep(config.QUERY_MS)\n-            self.pool.release(connection)\n-            return stock - quantity\n+            try:\n+                stock = await self._read_stock(connection, sku)\n+                self._check_available(sku, stock, quantity)\n+                connection.execute(\"UPDATE items SET stock = stock - ? WHERE sku = ?\", (quantity, sku))\n+                await self.runtime.sleep(config.QUERY_MS)\n+                return stock - quantity\n+            finally:\n+                self.pool.release(connection)\n",
+            "service": "inventory",
+            "summary": "The deployed refactor removed reserve's finally-based connection release, exhausting inventory's pool and causing the downstream checkout failures; restore guaranteed release."
+          },
+          "cost_microusd": 1510,
+          "decision": "patch",
+          "decision_correct": true,
+          "evidence_valid": true,
+          "expected": "patch",
+          "latency_ms": 11408,
+          "location_correct": true,
+          "outcome": "decided",
+          "patch_valid": false,
+          "resolved": false,
+          "root_cause_correct": true,
+          "tokens": 17576,
+          "tool_calls": 12,
+          "turns": 5,
+          "validation": {
+            "applies": false,
+            "changed_lines": 14,
+            "error": "git apply failed: error: patch failed: shop/inventory.py:24\nerror: shop/inventory.py: patch does not apply",
+            "files": [
+              "shop/inventory.py"
+            ],
+            "inputs_sha256": "f13e75504902a17cf6a8305b92e98fec555bc0ce941feb5d4cac1a182eb65993",
+            "own_tests": null,
+            "protected": null,
+            "replay": null,
+            "valid": false
+          }
+        },
+        "revert_last_deploy": {
+          "action": {
+            "act": "patch",
+            "calls": [],
+            "commit": "ee7027c",
+            "confidence": 50,
+            "evidence": [
+              "ev-0181",
+              "ev-0205",
+              "ev-0217",
+              "ev-0220",
+              "ev-0222",
+              "ev-0225",
+              "ev-0227",
+              "ev-0230"
+            ],
+            "fault_type": "resource_leak",
+            "file": "shop/inventory.py",
+            "function": "-",
+            "patch": "diff --git a/shop/inventory.py b/shop/inventory.py\nindex 5721ca8..f7b7cca 100644\n--- a/shop/inventory.py\n+++ b/shop/inventory.py\n@@ -24,17 +24,15 @@ class Inventory:\n     async def reserve(self, sku, quantity):\n         with self.telemetry.span(SERVICE, \"POST /reserve\", sku=sku, quantity=quantity):\n             connection = await self._connection()\n+            try:\n+                stock = await self._read_stock(connection, sku)\n+                if stock < quantity:\n+                    raise ServiceError(409, f\"out of stock: {sku}\")\n+                connection.execute(\"UPDATE items SET stock = stock - ? WHERE sku = ?\", (quantity, sku))\n+                await self.runtime.sleep(config.QUERY_MS)\n+                return stock - quantity\n+            finally:\n+                self.pool.release(connection)\n-            stock = await self._read_stock(connection, sku)\n-            self._check_available(sku, stock, quantity)\n-            connection.execute(\"UPDATE items SET stock = stock - ? WHERE sku = ?\", (quantity, sku))\n-            await self.runtime.sleep(config.QUERY_MS)\n-            self.pool.release(connection)\n-            return stock - quantity\n-\n-    @staticmethod\n-    def _check_available(sku, stock, quantity):\n-        if stock < quantity:\n-            raise ServiceError(409, f\"out of stock: {sku}\")\n \n     async def report_pool(self):\n         while self.running:\n",
+            "service": "inventory",
+            "summary": "rule baseline"
+          },
+          "cost_microusd": 0,
+          "decision": "patch",
+          "decision_correct": true,
+          "evidence_valid": true,
+          "expected": "patch",
+          "latency_ms": 0,
+          "location_correct": false,
+          "outcome": "decided",
+          "patch_valid": true,
+          "resolved": false,
+          "root_cause_correct": true,
+          "tokens": 0,
+          "tool_calls": 0,
+          "turns": 0,
+          "validation": {
+            "applies": true,
+            "changed_lines": 20,
+            "error": null,
+            "files": [
+              "shop/inventory.py"
+            ],
+            "inputs_sha256": "6c9a76f46a7466945314862907b4d3a4d8ca4856487c152981b6673a27ad1495",
+            "own_tests": "pass",
+            "protected": {
+              "failed": [],
+              "run": 5
+            },
+            "replay": {
+              "clean": true,
+              "page": false,
+              "pool_in_use_end": 0,
+              "web_errors": 0
+            },
+            "valid": true
+          }
+        }
+      }
+    },
+    {
+      "expected": "patch",
+      "id": "shop-app:c2:1",
+      "results": {
+        "claude-haiku-5-5": {
+          "action": {
+            "act": "patch",
+            "calls": [],
+            "commit": "268076a",
+            "confidence": 80,
+            "evidence": [
+              "ev-0237",
+              "ev-0247",
+              "ev-0198",
+              "ev-0186"
+            ],
+            "fault_type": "config_error",
+            "file": "shop/config.py",
+            "function": "-",
+            "patch": "--- a/shop/config.py\n+++ b/shop/config.py\n@@ -7,3 +7,3 @@\n CHECKOUT_LIMIT = 5\n-CHECKOUT_LIMIT_KEY = \"sku\"\n-CHECKOUT_LIMIT_WINDOW_MS = 60000\n+CHECKOUT_LIMIT_KEY = \"user\"\n+CHECKOUT_LIMIT_WINDOW_MS = 1000\n",
+            "service": "web",
+            "summary": "Web checkout errors (25% 503) began at deploy 268076a, which changed the checkout limit key from user to sku and the window from 1 s to 60 s. Popular SKUs hit the limit and return 503 for the whole minute, so customers are blocked. Reverting these two settings restores the per-user limit."
+          },
+          "cost_microusd": 3308,
+          "decision": "patch",
+          "decision_correct": true,
+          "evidence_valid": true,
+          "expected": "patch",
+          "latency_ms": 13628,
+          "location_correct": true,
+          "outcome": "decided",
+          "patch_valid": true,
+          "resolved": true,
+          "root_cause_correct": true,
+          "tokens": 23706,
+          "tool_calls": 12,
+          "turns": 5,
+          "validation": {
+            "applies": true,
+            "changed_lines": 4,
+            "error": null,
+            "files": [
+              "shop/config.py"
+            ],
+            "inputs_sha256": "abccdaeb7b453ffb9808c45aa583a6c500f9dcff044e5e1a369676549a19b685",
+            "own_tests": "pass",
+            "protected": {
+              "failed": [],
+              "run": 8
+            },
+            "replay": {
+              "clean": true,
+              "page": false,
+              "pool_in_use_end": 0,
+              "web_errors": 0
+            },
+            "valid": true
+          }
+        },
+        "deepest_abnormal_commit": {
+          "action": {
+            "act": "diagnose",
+            "calls": [],
+            "commit": "268076a",
+            "confidence": 50,
+            "evidence": [
+              "ev-0198",
+              "ev-0203",
+              "ev-0208",
+              "ev-0218",
+              "ev-0221",
+              "ev-0231",
+              "ev-0232",
+              "ev-0236"
+            ],
+            "fault_type": "config_error",
+            "file": "shop/config.py",
+            "function": "-",
+            "patch": "",
+            "service": "web",
+            "summary": "rule baseline"
+          },
+          "cost_microusd": 0,
+          "decision": "diagnose",
+          "decision_correct": false,
+          "evidence_valid": true,
+          "expected": "patch",
+          "latency_ms": 0,
+          "location_correct": true,
+          "outcome": "decided",
+          "patch_valid": false,
+          "resolved": false,
+          "root_cause_correct": true,
+          "tokens": 0,
+          "tool_calls": 0,
+          "turns": 0,
+          "validation": null
+        },
+        "deepseek-flash": {
+          "action": {
+            "act": "patch",
+            "calls": [],
+            "commit": "268076a",
+            "confidence": 90,
+            "evidence": [
+              "ev-0237",
+              "ev-0198",
+              "ev-0236",
+              "ev-0247",
+              "fd5d4bcf0847cd5f48804d17cf3deb4c",
+              "268076a",
+              "shop/config.py"
+            ],
+            "fault_type": "config_error",
+            "file": "shop/config.py",
+            "function": "-",
+            "patch": "--- a/shop/config.py\n+++ b/shop/config.py\n@@ -5,5 +5,5 @@ POOL_TIMEOUT_MS = 2000\n QUERY_MS = 4\n POOL_REPORT_MS = 15000\n CHECKOUT_LIMIT = 5\n-CHECKOUT_LIMIT_KEY = \"sku\"\n-CHECKOUT_LIMIT_WINDOW_MS = 60000\n+CHECKOUT_LIMIT_KEY = \"user\"\n+CHECKOUT_LIMIT_WINDOW_MS = 1000",
+            "service": "web",
+            "summary": "Commit 268076a changed the checkout limiter from per-user with a 1s window to per-SKU with a 60s window, so only 5 checkouts per product per minute are allowed and legitimate checkouts now get 503s, driving web's error rate to 25%."
+          },
+          "cost_microusd": 7642,
+          "decision": "patch",
+          "decision_correct": true,
+          "evidence_valid": true,
+          "expected": "patch",
+          "latency_ms": 39708,
+          "location_correct": true,
+          "outcome": "decided",
+          "patch_valid": true,
+          "resolved": true,
+          "root_cause_correct": true,
+          "tokens": 22693,
+          "tool_calls": 12,
+          "turns": 6,
+          "validation": {
+            "applies": true,
+            "changed_lines": 4,
+            "error": null,
+            "files": [
+              "shop/config.py"
+            ],
+            "inputs_sha256": "27269ea6ad07aff6d6f09cbc83e3ec119e2fe026eaf3ca0a9659bc75e45c8022",
+            "own_tests": "pass",
+            "protected": {
+              "failed": [],
+              "run": 8
+            },
+            "replay": {
+              "clean": true,
+              "page": false,
+              "pool_in_use_end": 0,
+              "web_errors": 0
+            },
+            "valid": true
+          }
+        },
+        "gpt-6-luna": {
+          "action": {
+            "act": "diagnose",
+            "calls": [],
+            "commit": "268076a",
+            "confidence": 99,
+            "evidence": [
+              "ev-0237",
+              "ev-0247",
+              "ev-0198",
+              "268076a",
+              "shop/config.py"
+            ],
+            "fault_type": "config_error",
+            "file": "shop/config.py",
+            "function": "-",
+            "patch": "",
+            "service": "web",
+            "summary": "The new SKU-based limit allows only five checkouts per product per 60 seconds, causing web to return 503s; this configuration change directly explains the elevated error rate."
+          },
+          "cost_microusd": 1441,
+          "decision": "diagnose",
+          "decision_correct": false,
+          "evidence_valid": true,
+          "expected": "patch",
+          "latency_ms": 16631,
+          "location_correct": true,
+          "outcome": "decided",
+          "patch_valid": false,
+          "resolved": false,
+          "root_cause_correct": true,
+          "tokens": 18356,
+          "tool_calls": 15,
+          "turns": 6,
+          "validation": null
+        },
+        "revert_last_deploy": {
+          "action": {
+            "act": "patch",
+            "calls": [],
+            "commit": "268076a",
+            "confidence": 50,
+            "evidence": [
+              "ev-0186",
+              "ev-0198",
+              "ev-0203",
+              "ev-0208",
+              "ev-0218",
+              "ev-0221",
+              "ev-0231",
+              "ev-0232"
+            ],
+            "fault_type": "config_error",
+            "file": "shop/config.py",
+            "function": "-",
+            "patch": "diff --git a/shop/config.py b/shop/config.py\nindex 322204a..ab47230 100644\n--- a/shop/config.py\n+++ b/shop/config.py\n@@ -5,5 +5,5 @@ POOL_TIMEOUT_MS = 2000\n QUERY_MS = 4\n POOL_REPORT_MS = 15000\n CHECKOUT_LIMIT = 5\n+CHECKOUT_LIMIT_KEY = \"user\"\n+CHECKOUT_LIMIT_WINDOW_MS = 1000\n-CHECKOUT_LIMIT_KEY = \"sku\"\n-CHECKOUT_LIMIT_WINDOW_MS = 60000\n",
+            "service": "web",
+            "summary": "rule baseline"
+          },
+          "cost_microusd": 0,
+          "decision": "patch",
+          "decision_correct": true,
+          "evidence_valid": true,
+          "expected": "patch",
+          "latency_ms": 0,
+          "location_correct": true,
+          "outcome": "decided",
+          "patch_valid": true,
+          "resolved": true,
+          "root_cause_correct": true,
+          "tokens": 0,
+          "tool_calls": 0,
+          "turns": 0,
+          "validation": {
+            "applies": true,
+            "changed_lines": 4,
+            "error": null,
+            "files": [
+              "shop/config.py"
+            ],
+            "inputs_sha256": "8d9363dfa618588e4daaed5f8125996b30e4f7bbcafb44348d730492560ff313",
+            "own_tests": "pass",
+            "protected": {
+              "failed": [],
+              "run": 8
+            },
+            "replay": {
+              "clean": true,
+              "page": false,
+              "pool_in_use_end": 0,
+              "web_errors": 0
+            },
+            "valid": true
+          }
+        }
+      }
+    },
+    {
+      "expected": "patch",
+      "id": "shop-app:c2:2",
+      "results": {
+        "claude-haiku-5-5": {
+          "action": {
+            "act": "diagnose",
+            "calls": [],
+            "commit": "268076a",
+            "confidence": 80,
+            "evidence": [
+              "ev-0233",
+              "ev-0232",
+              "ev-0197",
+              "d5aacbb360857d1c5680e77fcaf43921"
+            ],
+            "fault_type": "config_error",
+            "file": "shop/config.py",
+            "function": "-",
+            "patch": "",
+            "service": "web",
+            "summary": "Commit 268076a changed CHECKOUT_LIMIT_KEY from user to sku and the window from 1s to 60s, so each product allows only 5 checkouts per minute and popular items return 503 to customers; the limit values are a business decision for a human to revise."
+          },
+          "cost_microusd": 3943,
+          "decision": "diagnose",
+          "decision_correct": false,
+          "evidence_valid": true,
+          "expected": "patch",
+          "latency_ms": 18184,
+          "location_correct": true,
+          "outcome": "decided",
+          "patch_valid": false,
+          "resolved": false,
+          "root_cause_correct": true,
+          "tokens": 30102,
+          "tool_calls": 10,
+          "turns": 6,
+          "validation": null
+        },
+        "deepest_abnormal_commit": {
+          "action": {
+            "act": "diagnose",
+            "calls": [],
+            "commit": "268076a",
+            "confidence": 50,
+            "evidence": [
+              "ev-0197",
+              "ev-0200",
+              "ev-0204",
+              "ev-0205",
+              "ev-0206",
+              "ev-0216",
+              "ev-0219",
+              "ev-0224"
+            ],
+            "fault_type": "config_error",
+            "file": "shop/config.py",
+            "function": "-",
+            "patch": "",
+            "service": "web",
+            "summary": "rule baseline"
+          },
+          "cost_microusd": 0,
+          "decision": "diagnose",
+          "decision_correct": false,
+          "evidence_valid": true,
+          "expected": "patch",
+          "latency_ms": 0,
+          "location_correct": true,
+          "outcome": "decided",
+          "patch_valid": false,
+          "resolved": false,
+          "root_cause_correct": true,
+          "tokens": 0,
+          "tool_calls": 0,
+          "turns": 0,
+          "validation": null
+        },
+        "deepseek-flash": {
+          "action": {
+            "act": "patch",
+            "calls": [],
+            "commit": "268076a",
+            "confidence": 95,
+            "evidence": [
+              "ev-0233",
+              "ev-0243",
+              "ev-0244",
+              "ev-0181",
+              "ev-0197",
+              "ev-0200",
+              "ev-0232",
+              "268076a"
+            ],
+            "fault_type": "config_error",
+            "file": "shop/config.py",
+            "function": "-",
+            "patch": "--- a/shop/config.py\n+++ b/shop/config.py\n@@ -5,5 +5,5 @@\n POOL_TIMEOUT_MS = 2000\n QUERY_MS = 4\n POOL_REPORT_MS = 15000\n CHECKOUT_LIMIT = 5\n-CHECKOUT_LIMIT_KEY = \"sku\"\n-CHECKOUT_LIMIT_WINDOW_MS = 60000\n+CHECKOUT_LIMIT_KEY = \"user\"\n+CHECKOUT_LIMIT_WINDOW_MS = 1000\n",
+            "service": "web",
+            "summary": "Commit 268076a changed the checkout rate limit from per-user over 1s to per-SKU over 60s, so a handful of popular SKUs exhaust the quota for everyone and /checkout returns 503, driving web's error rate to 21.6%."
+          },
+          "cost_microusd": 2095,
+          "decision": "patch",
+          "decision_correct": true,
+          "evidence_valid": true,
+          "expected": "patch",
+          "latency_ms": 10297,
+          "location_correct": true,
+          "outcome": "decided",
+          "patch_valid": true,
+          "resolved": true,
+          "root_cause_correct": true,
+          "tokens": 9996,
+          "tool_calls": 9,
+          "turns": 4,
+          "validation": {
+            "applies": true,
+            "changed_lines": 4,
+            "error": null,
+            "files": [
+              "shop/config.py"
+            ],
+            "inputs_sha256": "847aba59ff0ca21035205077148e4d20825d4882ee9331054fa75659d893185e",
+            "own_tests": "pass",
+            "protected": {
+              "failed": [],
+              "run": 8
+            },
+            "replay": {
+              "clean": true,
+              "page": false,
+              "pool_in_use_end": 0,
+              "web_errors": 0
+            },
+            "valid": true
+          }
+        },
+        "gpt-6-luna": {
+          "action": {
+            "act": "patch",
+            "calls": [],
+            "commit": "268076a",
+            "confidence": 99,
+            "evidence": [
+              "ev-0233",
+              "ev-0237",
+              "ev-0238",
+              "ev-0243",
+              "ev-0244",
+              "268076a",
+              "shop/config.py",
+              "ev-0197"
+            ],
+            "fault_type": "config_error",
+            "file": "shop/config.py",
+            "function": "-",
+            "patch": "--- a/shop/config.py\n+++ b/shop/config.py\n@@ -5,5 +5,5 @@ POOL_TIMEOUT_MS = 2000\n QUERY_MS = 4\n POOL_REPORT_MS = 15000\n CHECKOUT_LIMIT = 5\n-CHECKOUT_LIMIT_KEY = \"sku\"\n-CHECKOUT_LIMIT_WINDOW_MS = 60000\n+CHECKOUT_LIMIT_KEY = \"user\"\n+CHECKOUT_LIMIT_WINDOW_MS = 1000",
+            "service": "web",
+            "summary": "The new per-SKU limit and 60-second window throttle ordinary checkout traffic, producing repeated 503s in web while downstream services remain healthy; restore the prior per-user, one-second settings."
+          },
+          "cost_microusd": 1289,
+          "decision": "patch",
+          "decision_correct": true,
+          "evidence_valid": true,
+          "expected": "patch",
+          "latency_ms": 11196,
+          "location_correct": true,
+          "outcome": "decided",
+          "patch_valid": true,
+          "resolved": true,
+          "root_cause_correct": true,
+          "tokens": 15878,
+          "tool_calls": 12,
+          "turns": 5,
+          "validation": {
+            "applies": true,
+            "changed_lines": 4,
+            "error": null,
+            "files": [
+              "shop/config.py"
+            ],
+            "inputs_sha256": "ad824879f81252afd655ceffe2a6497ff5d214787592168cb98c14d86193a083",
+            "own_tests": "pass",
+            "protected": {
+              "failed": [],
+              "run": 8
+            },
+            "replay": {
+              "clean": true,
+              "page": false,
+              "pool_in_use_end": 0,
+              "web_errors": 0
+            },
+            "valid": true
+          }
+        },
+        "revert_last_deploy": {
+          "action": {
+            "act": "patch",
+            "calls": [],
+            "commit": "268076a",
+            "confidence": 50,
+            "evidence": [
+              "ev-0181",
+              "ev-0197",
+              "ev-0200",
+              "ev-0204",
+              "ev-0205",
+              "ev-0206",
+              "ev-0216",
+              "ev-0219"
+            ],
+            "fault_type": "config_error",
+            "file": "shop/config.py",
+            "function": "-",
+            "patch": "diff --git a/shop/config.py b/shop/config.py\nindex 322204a..ab47230 100644\n--- a/shop/config.py\n+++ b/shop/config.py\n@@ -5,5 +5,5 @@ POOL_TIMEOUT_MS = 2000\n QUERY_MS = 4\n POOL_REPORT_MS = 15000\n CHECKOUT_LIMIT = 5\n+CHECKOUT_LIMIT_KEY = \"user\"\n+CHECKOUT_LIMIT_WINDOW_MS = 1000\n-CHECKOUT_LIMIT_KEY = \"sku\"\n-CHECKOUT_LIMIT_WINDOW_MS = 60000\n",
+            "service": "web",
+            "summary": "rule baseline"
+          },
+          "cost_microusd": 0,
+          "decision": "patch",
+          "decision_correct": true,
+          "evidence_valid": true,
+          "expected": "patch",
+          "latency_ms": 0,
+          "location_correct": true,
+          "outcome": "decided",
+          "patch_valid": true,
+          "resolved": true,
+          "root_cause_correct": true,
+          "tokens": 0,
+          "tool_calls": 0,
+          "turns": 0,
+          "validation": {
+            "applies": true,
+            "changed_lines": 4,
+            "error": null,
+            "files": [
+              "shop/config.py"
+            ],
+            "inputs_sha256": "037bca3ddae968dd8facd5f9c830d8427263ebf1eaff32a7a330a0b2e165b0bf",
+            "own_tests": "pass",
+            "protected": {
+              "failed": [],
+              "run": 8
+            },
+            "replay": {
+              "clean": true,
+              "page": false,
+              "pool_in_use_end": 0,
+              "web_errors": 0
+            },
+            "valid": true
+          }
+        }
+      }
+    },
+    {
+      "expected": "patch",
+      "id": "shop-app:c3:1",
+      "results": {
+        "claude-haiku-5-5": {
+          "action": {
+            "act": "patch",
+            "calls": [],
+            "commit": "a2a4dc4",
+            "confidence": 70,
+            "evidence": [
+              "ev-0251",
+              "ev-0312",
+              "ev-0186",
+              "93e757eb8c7e7926fd40a3e7bdad1584"
+            ],
+            "fault_type": "code_defect",
+            "file": "shop/orders.py",
+            "function": "Orders.place",
+            "patch": "--- a/shop/orders.py\n+++ b/shop/orders.py\n@@ -16,3 +16,3 @@\n             if quantity > config.MAX_ORDER_ITEMS:\n-                raise ValueError(f\"at most {config.MAX_ORDER_ITEMS} items per order\")\n+                raise ServiceError(400, f\"at most {config.MAX_ORDER_ITEMS} items per order\")\n             try:\n",
+            "service": "orders",
+            "summary": "Commit a2a4dc4 added a quantity cap in Orders.place that raises ValueError, which is not a ServiceError and escapes as an unhandled 500 span error, so orders fails and web checkout returns 502; the fix raises a ServiceError 400 instead.}]}"
+          },
+          "cost_microusd": 3939,
+          "decision": "patch",
+          "decision_correct": true,
+          "evidence_valid": true,
+          "expected": "patch",
+          "latency_ms": 18530,
+          "location_correct": true,
+          "outcome": "decided",
+          "patch_valid": true,
+          "resolved": true,
+          "root_cause_correct": true,
+          "tokens": 28826,
+          "tool_calls": 10,
+          "turns": 5,
+          "validation": {
+            "applies": true,
+            "changed_lines": 2,
+            "error": null,
+            "files": [
+              "shop/orders.py"
+            ],
+            "inputs_sha256": "096d71d9cf3b420d706c42c15a5693a1e1209fe7c88036f1840465c88649918d",
+            "own_tests": "pass",
+            "protected": {
+              "failed": [],
+              "run": 10
+            },
+            "replay": {
+              "clean": true,
+              "page": false,
+              "pool_in_use_end": 0,
+              "web_errors": 0
+            },
+            "valid": true
+          }
+        },
+        "deepest_abnormal_commit": {
+          "action": {
+            "act": "diagnose",
+            "calls": [],
+            "commit": "a2a4dc4",
+            "confidence": 50,
+            "evidence": [
+              "ev-0251",
+              "ev-0312"
+            ],
+            "fault_type": "code_defect",
+            "file": "shop/config.py",
+            "function": "-",
+            "patch": "",
+            "service": "orders",
+            "summary": "rule baseline"
+          },
+          "cost_microusd": 0,
+          "decision": "diagnose",
+          "decision_correct": false,
+          "evidence_valid": true,
+          "expected": "patch",
+          "latency_ms": 0,
+          "location_correct": false,
+          "outcome": "decided",
+          "patch_valid": false,
+          "resolved": false,
+          "root_cause_correct": true,
+          "tokens": 0,
+          "tool_calls": 0,
+          "turns": 0,
+          "validation": null
+        },
+        "deepseek-flash": {
+          "action": {
+            "act": "patch",
+            "calls": [],
+            "commit": "a2a4dc4",
+            "confidence": 82,
+            "evidence": [
+              "ev-0312",
+              "ev-0251",
+              "a2a4dc4",
+              "93e757eb8c7e7926fd40a3e7bdad1584",
+              "35cdc4e76a2cb0e8",
+              "shop/orders.py",
+              "ev-0305"
+            ],
+            "fault_type": "code_defect",
+            "file": "shop/orders.py",
+            "function": "Orders.place",
+            "patch": "--- a/shop/orders.py\n+++ b/shop/orders.py\n@@ -13,8 +13,8 @@\n \n     async def place(self, user, sku, quantity):\n         with self.telemetry.span(SERVICE, \"POST /orders\", user=user, sku=sku):\n             if quantity > config.MAX_ORDER_ITEMS:\n-                raise ValueError(f\"at most {config.MAX_ORDER_ITEMS} items per order\")\n+                raise ServiceError(400, f\"at most {config.MAX_ORDER_ITEMS} items per order\")\n             try:\n                 await call(self.runtime, self.telemetry, SERVICE, \"inventory\", \"POST /reserve\",\n                            self.inventory.reserve, sku, quantity)",
+            "service": "orders",
+            "summary": "Orders error rate jumps to 0.40 right after deploy a2a4dc4; the new MAX_ORDER_ITEMS guard raises a bare ValueError instead of a 4xx ServiceError, so rpc.call turns it into a 500 and web shows 502s."
+          },
+          "cost_microusd": 9717,
+          "decision": "patch",
+          "decision_correct": true,
+          "evidence_valid": true,
+          "expected": "patch",
+          "latency_ms": 49904,
+          "location_correct": true,
+          "outcome": "decided",
+          "patch_valid": true,
+          "resolved": true,
+          "root_cause_correct": true,
+          "tokens": 38962,
+          "tool_calls": 16,
+          "turns": 8,
+          "validation": {
+            "applies": true,
+            "changed_lines": 2,
+            "error": null,
+            "files": [
+              "shop/orders.py"
+            ],
+            "inputs_sha256": "7b80ee6f0898aede711c196d30017a7e41a6d11ac19fa13acd0011f3728d7670",
+            "own_tests": "pass",
+            "protected": {
+              "failed": [],
+              "run": 10
+            },
+            "replay": {
+              "clean": true,
+              "page": false,
+              "pool_in_use_end": 0,
+              "web_errors": 0
+            },
+            "valid": true
+          }
+        },
+        "gpt-6-luna": {
+          "action": {
+            "act": "patch",
+            "calls": [],
+            "commit": "a2a4dc4",
+            "confidence": 97,
+            "evidence": [
+              "a2a4dc4",
+              "shop/orders.py",
+              "93e757eb8c7e7926fd40a3e7bdad1584",
+              "372e55dc0b53fb7cd03b33342d8aee4b",
+              "ev-0312",
+              "ev-0315"
+            ],
+            "fault_type": "code_defect",
+            "file": "shop/orders.py",
+            "function": "Orders.place",
+            "patch": "--- a/shop/orders.py\n+++ b/shop/orders.py\n@@ -14,7 +14,7 @@ class Orders:\n     async def place(self, user, sku, quantity):\n         with self.telemetry.span(SERVICE, \"POST /orders\", user=user, sku=sku):\n             if quantity > config.MAX_ORDER_ITEMS:\n-                raise ValueError(f\"at most {config.MAX_ORDER_ITEMS} items per order\")\n+                raise ServiceError(400, f\"at most {config.MAX_ORDER_ITEMS} items per order\")\n             try:\n                 await call(self.runtime, self.telemetry, SERVICE, \"inventory\", \"POST /reserve\",\n                            self.inventory.reserve, sku, quantity)",
+            "service": "orders",
+            "summary": "The new order-size cap raises ValueError, which becomes a 500 through RPC and causes checkout 502s; return a client error instead."
+          },
+          "cost_microusd": 2634,
+          "decision": "patch",
+          "decision_correct": true,
+          "evidence_valid": true,
+          "expected": "patch",
+          "latency_ms": 19930,
+          "location_correct": true,
+          "outcome": "decided",
+          "patch_valid": true,
+          "resolved": true,
+          "root_cause_correct": true,
+          "tokens": 29033,
+          "tool_calls": 18,
+          "turns": 7,
+          "validation": {
+            "applies": true,
+            "changed_lines": 2,
+            "error": null,
+            "files": [
+              "shop/orders.py"
+            ],
+            "inputs_sha256": "c9014e9fd8a50440141079c2dae769b465d2954e27a261f3c9c167e6ea1dc4d4",
+            "own_tests": "pass",
+            "protected": {
+              "failed": [],
+              "run": 10
+            },
+            "replay": {
+              "clean": true,
+              "page": false,
+              "pool_in_use_end": 0,
+              "web_errors": 0
+            },
+            "valid": true
+          }
+        },
+        "revert_last_deploy": {
+          "action": {
+            "act": "patch",
+            "calls": [],
+            "commit": "828689b",
+            "confidence": 50,
+            "evidence": [
+              "ev-0282",
+              "ev-0198",
+              "ev-0199",
+              "ev-0200",
+              "ev-0201",
+              "ev-0202",
+              "ev-0203",
+              "ev-0204"
+            ],
+            "fault_type": "code_defect",
+            "file": "shop/web.py",
+            "function": "-",
+            "patch": "diff --git a/shop/web.py b/shop/web.py\nindex 5de49af..874fc9c 100644\n--- a/shop/web.py\n+++ b/shop/web.py\n@@ -44,7 +44,7 @@ class Web:\n             except ServiceError as exc:\n                 status = exc.status if exc.status < 500 else 502\n                 if status >= 500:\n+                    self.telemetry.log(SERVICE, \"ERROR\", f\"{route} failed: upstream {target} returned {exc.status}\")\n-                    self.telemetry.log(SERVICE, \"ERROR\", f\"{route} failed: {target} {name} returned {exc.status}\")\n             span[\"attributes\"][\"http.status_code\"] = status\n             if status >= 500:\n                 span[\"status\"] = \"ERROR\"\n",
+            "service": "web",
+            "summary": "rule baseline"
+          },
+          "cost_microusd": 0,
+          "decision": "patch",
+          "decision_correct": true,
+          "evidence_valid": true,
+          "expected": "patch",
+          "latency_ms": 0,
+          "location_correct": false,
+          "outcome": "decided",
+          "patch_valid": false,
+          "resolved": false,
+          "root_cause_correct": false,
+          "tokens": 0,
+          "tool_calls": 0,
+          "turns": 0,
+          "validation": {
+            "applies": true,
+            "changed_lines": 2,
+            "error": null,
+            "files": [
+              "shop/web.py"
+            ],
+            "inputs_sha256": "ed135006c6fb489e5ca0809d5479f7cdb4b58b7a7324eafa265e030ce3f75756",
+            "own_tests": "pass",
+            "protected": {
+              "failed": [
+                "check_orders.OrderChecks.test_an_oversized_order_is_refused_as_a_client_error"
+              ],
+              "run": 10
+            },
+            "replay": {
+              "clean": false,
+              "page": true,
+              "pool_in_use_end": 0,
+              "web_errors": 345
+            },
+            "valid": false
+          }
+        }
+      }
+    },
+    {
+      "expected": "patch",
+      "id": "shop-app:c3:2",
+      "results": {
+        "claude-haiku-5-5": {
+          "action": {
+            "act": "patch",
+            "calls": [],
+            "commit": "a2a4dc4",
+            "confidence": 72,
+            "evidence": [
+              "ev-0181",
+              "ev-0244",
+              "ev-0298",
+              "a8ea98c39f809e534d2707886a695c19",
+              "a9419161ccdb32be"
+            ],
+            "fault_type": "code_defect",
+            "file": "shop/orders.py",
+            "function": "Orders.place",
+            "patch": "--- a/shop/orders.py\n+++ b/shop/orders.py\n@@ -16,2 +16,2 @@\n             if quantity > config.MAX_ORDER_ITEMS:\n-                raise ValueError(f\"at most {config.MAX_ORDER_ITEMS} items per order\")\n+                raise ServiceError(400, f\"at most {config.MAX_ORDER_ITEMS} items per order\")\n",
+            "service": "orders",
+            "summary": "Commit a2a4dc4 added a per-order item cap that raises ValueError, which is not a ServiceError, so the rejection escapes as a server error; orders error rate rose from 0 to about 0.36 after the 600000 deploy and web checkouts return 502.}"
+          },
+          "cost_microusd": 5526,
+          "decision": "patch",
+          "decision_correct": true,
+          "evidence_valid": true,
+          "expected": "patch",
+          "latency_ms": 18740,
+          "location_correct": true,
+          "outcome": "decided",
+          "patch_valid": false,
+          "resolved": false,
+          "root_cause_correct": true,
+          "tokens": 44141,
+          "tool_calls": 15,
+          "turns": 7,
+          "validation": {
+            "applies": false,
+            "changed_lines": 2,
+            "error": "git apply failed: error: patch failed: shop/orders.py:16\nerror: shop/orders.py: patch does not apply",
+            "files": [
+              "shop/orders.py"
+            ],
+            "inputs_sha256": "5db638d2790c42bc9eb61f3addc7a64176d5e9924010dd605af6d7a63b904902",
+            "own_tests": null,
+            "protected": null,
+            "replay": null,
+            "valid": false
+          }
+        },
+        "deepest_abnormal_commit": {
+          "action": {
+            "act": "diagnose",
+            "calls": [],
+            "commit": "a2a4dc4",
+            "confidence": 50,
+            "evidence": [
+              "ev-0244",
+              "ev-0298"
+            ],
+            "fault_type": "code_defect",
+            "file": "shop/config.py",
+            "function": "-",
+            "patch": "",
+            "service": "orders",
+            "summary": "rule baseline"
+          },
+          "cost_microusd": 0,
+          "decision": "diagnose",
+          "decision_correct": false,
+          "evidence_valid": true,
+          "expected": "patch",
+          "latency_ms": 0,
+          "location_correct": false,
+          "outcome": "decided",
+          "patch_valid": false,
+          "resolved": false,
+          "root_cause_correct": true,
+          "tokens": 0,
+          "tool_calls": 0,
+          "turns": 0,
+          "validation": null
+        },
+        "deepseek-flash": {
+          "action": {
+            "act": "patch",
+            "calls": [],
+            "commit": "a2a4dc4",
+            "confidence": 82,
+            "evidence": [
+              "ev-0181",
+              "a2a4dc4",
+              "ev-0244",
+              "ev-0298",
+              "a8ea98c39f809e534d2707886a695c19",
+              "ev-0265"
+            ],
+            "fault_type": "code_defect",
+            "file": "shop/orders.py",
+            "function": "Orders.place",
+            "patch": "--- a/shop/orders.py\n+++ b/shop/orders.py\n@@ -14,7 +14,7 @@ class Orders:\n     async def place(self, user, sku, quantity):\n         with self.telemetry.span(SERVICE, \"POST /orders\", user=user, sku=sku):\n             if quantity > config.MAX_ORDER_ITEMS:\n-                raise ValueError(f\"at most {config.MAX_ORDER_ITEMS} items per order\")\n+                raise ServiceError(400, f\"at most {config.MAX_ORDER_ITEMS} items per order\")\n             try:\n                 await call(self.runtime, self.telemetry, SERVICE, \"inventory\", \"POST /reserve\",\n                            self.inventory.reserve, sku, quantity)",
+            "service": "orders",
+            "summary": "The orders deploy a2a4dc4 added a quantity>2 check that raises a bare ValueError before any handling; rpc.call catches it as a generic exception and returns 500, which web maps to 502, driving the error-rate page. Reject the cap with a proper ServiceError(400) instead."
+          },
+          "cost_microusd": 17846,
+          "decision": "patch",
+          "decision_correct": true,
+          "evidence_valid": true,
+          "expected": "patch",
+          "latency_ms": 100160,
+          "location_correct": true,
+          "outcome": "decided",
+          "patch_valid": true,
+          "resolved": true,
+          "root_cause_correct": true,
+          "tokens": 53091,
+          "tool_calls": 17,
+          "turns": 8,
+          "validation": {
+            "applies": true,
+            "changed_lines": 2,
+            "error": null,
+            "files": [
+              "shop/orders.py"
+            ],
+            "inputs_sha256": "dd744bc487b145fca040c029c226052e642095db4d73695c5b65fdf6cabeec0f",
+            "own_tests": "pass",
+            "protected": {
+              "failed": [],
+              "run": 10
+            },
+            "replay": {
+              "clean": true,
+              "page": false,
+              "pool_in_use_end": 0,
+              "web_errors": 0
+            },
+            "valid": true
+          }
+        },
+        "gpt-6-luna": {
+          "action": {
+            "act": "patch",
+            "calls": [],
+            "commit": "a2a4dc4",
+            "confidence": 98,
+            "evidence": [
+              "a2a4dc4",
+              "shop/orders.py",
+              "a8ea98c39f809e534d2707886a695c19",
+              "ev-0298",
+              "ev-0290"
+            ],
+            "fault_type": "code_defect",
+            "file": "shop/orders.py",
+            "function": "Orders.place",
+            "patch": "--- a/shop/orders.py\n+++ b/shop/orders.py\n@@ -14,7 +14,7 @@ class Orders:\n     async def place(self, user, sku, quantity):\n         with self.telemetry.span(SERVICE, \"POST /orders\", user=user, sku=sku):\n             if quantity > config.MAX_ORDER_ITEMS:\n-                raise ValueError(f\"at most {config.MAX_ORDER_ITEMS} items per order\")\n+                raise ServiceError(400, f\"at most {config.MAX_ORDER_ITEMS} items per order\")\n             try:\n                 await call(self.runtime, self.telemetry, SERVICE, \"inventory\", \"POST /reserve\",\n                            self.inventory.reserve, sku, quantity)",
+            "service": "orders",
+            "summary": "The new order-item cap raises ValueError, which the RPC layer converts to HTTP 500; this causes the orders failures and web\u2019s elevated error rate. Raise ServiceError(400) so oversized orders are client errors rather than server failures."
+          },
+          "cost_microusd": 4139,
+          "decision": "patch",
+          "decision_correct": true,
+          "evidence_valid": true,
+          "expected": "patch",
+          "latency_ms": 26628,
+          "location_correct": true,
+          "outcome": "decided",
+          "patch_valid": true,
+          "resolved": true,
+          "root_cause_correct": true,
+          "tokens": 45475,
+          "tool_calls": 24,
+          "turns": 9,
+          "validation": {
+            "applies": true,
+            "changed_lines": 2,
+            "error": null,
+            "files": [
+              "shop/orders.py"
+            ],
+            "inputs_sha256": "dd744bc487b145fca040c029c226052e642095db4d73695c5b65fdf6cabeec0f",
+            "own_tests": "pass",
+            "protected": {
+              "failed": [],
+              "run": 10
+            },
+            "replay": {
+              "clean": true,
+              "page": false,
+              "pool_in_use_end": 0,
+              "web_errors": 0
+            },
+            "valid": true
+          }
+        },
+        "revert_last_deploy": {
+          "action": {
+            "act": "patch",
+            "calls": [],
+            "commit": "828689b",
+            "confidence": 50,
+            "evidence": [
+              "ev-0270",
+              "ev-0193",
+              "ev-0194",
+              "ev-0195",
+              "ev-0196",
+              "ev-0197",
+              "ev-0198",
+              "ev-0199"
+            ],
+            "fault_type": "code_defect",
+            "file": "shop/web.py",
+            "function": "-",
+            "patch": "diff --git a/shop/web.py b/shop/web.py\nindex 5de49af..874fc9c 100644\n--- a/shop/web.py\n+++ b/shop/web.py\n@@ -44,7 +44,7 @@ class Web:\n             except ServiceError as exc:\n                 status = exc.status if exc.status < 500 else 502\n                 if status >= 500:\n+                    self.telemetry.log(SERVICE, \"ERROR\", f\"{route} failed: upstream {target} returned {exc.status}\")\n-                    self.telemetry.log(SERVICE, \"ERROR\", f\"{route} failed: {target} {name} returned {exc.status}\")\n             span[\"attributes\"][\"http.status_code\"] = status\n             if status >= 500:\n                 span[\"status\"] = \"ERROR\"\n",
+            "service": "web",
+            "summary": "rule baseline"
+          },
+          "cost_microusd": 0,
+          "decision": "patch",
+          "decision_correct": true,
+          "evidence_valid": true,
+          "expected": "patch",
+          "latency_ms": 0,
+          "location_correct": false,
+          "outcome": "decided",
+          "patch_valid": false,
+          "resolved": false,
+          "root_cause_correct": false,
+          "tokens": 0,
+          "tool_calls": 0,
+          "turns": 0,
+          "validation": {
+            "applies": true,
+            "changed_lines": 2,
+            "error": null,
+            "files": [
+              "shop/web.py"
+            ],
+            "inputs_sha256": "62ff61a88f971fb1cdca5ac19730cb2183a3e8ea8aa894c16971f91519ded65e",
+            "own_tests": "pass",
+            "protected": {
+              "failed": [
+                "check_orders.OrderChecks.test_an_oversized_order_is_refused_as_a_client_error"
+              ],
+              "run": 10
+            },
+            "replay": {
+              "clean": false,
+              "page": true,
+              "pool_in_use_end": 0,
+              "web_errors": 330
+            },
+            "valid": false
+          }
+        }
+      }
+    },
+    {
+      "expected": "patch",
+      "id": "shop-app:c4:1",
+      "results": {
+        "claude-haiku-5-5": {
+          "action": {
+            "act": "patch",
+            "calls": [],
+            "commit": "0b1e0de",
+            "confidence": 80,
+            "evidence": [
+              "ev-0252",
+              "ev-0255",
+              "ev-0262",
+              "ev-0254",
+              "32467b9a8bef80219cb4c51055441d22"
+            ],
+            "fault_type": "slow_query",
+            "file": "shop/inventory.py",
+            "function": "Inventory.stock",
+            "patch": "--- a/shop/inventory.py\n+++ b/shop/inventory.py\n@@ -19,10 +19,7 @@ class Inventory:\n         with self.telemetry.span(SERVICE, \"GET /stock/{sku}\", sku=sku):\n             connection = await self._connection()\n             try:\n-                rows = await self._query(connection, \"SELECT stock FROM items WHERE lower(sku) = lower(?)\", (sku,))\n-                if not rows:\n-                    raise ServiceError(404, f\"unknown sku: {sku}\")\n-                return rows[0][0]\n+                return await self._read_stock(connection, sku)\n             finally:\n                 self.pool.release(connection)\n ",
+            "service": "inventory",
+            "summary": "Commit 0b1e0de changed the stock lookup to a lower(sku) comparison that cannot use the index, making inventory GET /stock slow (p95 1804 ms), so web's calls to inventory time out with 504 and web error rate rises; reverting the query to the original _read_stock path restores it."
+          },
+          "cost_microusd": 2970,
+          "decision": "patch",
+          "decision_correct": true,
+          "evidence_valid": true,
+          "expected": "patch",
+          "latency_ms": 15672,
+          "location_correct": true,
+          "outcome": "decided",
+          "patch_valid": false,
+          "resolved": false,
+          "root_cause_correct": true,
+          "tokens": 19521,
+          "tool_calls": 8,
+          "turns": 4,
+          "validation": {
+            "applies": true,
+            "changed_lines": 5,
+            "error": null,
+            "files": [
+              "shop/inventory.py"
+            ],
+            "inputs_sha256": "37fa8f899803560399de4339158e73650ebb28bf0eafce4be30ed893e83ca23b",
+            "own_tests": "pass",
+            "protected": {
+              "failed": [
+                "check_lookup.LookupChecks.test_a_lookup_shows_the_stock_in_the_database",
+                "check_lookup.LookupChecks.test_any_case_finds_the_product"
+              ],
+              "run": 15
+            },
+            "replay": {
+              "clean": true,
+              "page": false,
+              "pool_in_use_end": 0,
+              "web_errors": 0
+            },
+            "valid": false
+          }
+        },
+        "deepest_abnormal_commit": {
+          "action": {
+            "act": "diagnose",
+            "calls": [],
+            "commit": "0b1e0de",
+            "confidence": 50,
+            "evidence": [
+              "ev-0212",
+              "ev-0255"
+            ],
+            "fault_type": "slow_query",
+            "file": "shop/inventory.py",
+            "function": "-",
+            "patch": "",
+            "service": "inventory",
+            "summary": "rule baseline"
+          },
+          "cost_microusd": 0,
+          "decision": "diagnose",
+          "decision_correct": false,
+          "evidence_valid": true,
+          "expected": "patch",
+          "latency_ms": 0,
+          "location_correct": false,
+          "outcome": "decided",
+          "patch_valid": false,
+          "resolved": false,
+          "root_cause_correct": true,
+          "tokens": 0,
+          "tool_calls": 0,
+          "turns": 0,
+          "validation": null
+        },
+        "deepseek-flash": {
+          "action": null,
+          "cost_microusd": 3238,
+          "decision": null,
+          "decision_correct": false,
+          "evidence_valid": false,
+          "expected": "patch",
+          "latency_ms": 17304,
+          "location_correct": false,
+          "outcome": "invalid_output",
+          "patch_valid": false,
+          "resolved": false,
+          "root_cause_correct": false,
+          "tokens": 21325,
+          "tool_calls": 9,
+          "turns": 7,
+          "validation": null
+        },
+        "gpt-6-luna": {
+          "action": {
+            "act": "patch",
+            "calls": [],
+            "commit": "0b1e0de",
+            "confidence": 98,
+            "evidence": [
+              "0b1e0de",
+              "shop/inventory.py",
+              "ev-0212",
+              "ev-0255",
+              "32467b9a8bef80219cb4c51055441d22"
+            ],
+            "fault_type": "slow_query",
+            "file": "shop/inventory.py",
+            "function": "Inventory.stock",
+            "patch": "--- a/shop/inventory.py\n+++ b/shop/inventory.py\n@@ -19,7 +19,7 @@ class Inventory:\n         with self.telemetry.span(SERVICE, \"GET /stock/{sku}\", sku=sku):\n             connection = await self._connection()\n             try:\n-                rows = await self._query(connection, \"SELECT stock FROM items WHERE lower(sku) = lower(?)\", (sku,))\n+                rows = await self._query(connection, \"SELECT stock FROM items WHERE sku = ? COLLATE NOCASE\", (sku,))\n                 if not rows:\n                     raise ServiceError(404, f\"unknown sku: {sku}\")\n                 return rows[0][0]",
+            "service": "inventory",
+            "summary": "The case-insensitive lookup introduced in 0b1e0de applies lower() to the indexed column, forcing a table scan that drives inventory latency above web's 1.5-second upstream timeout; use a case-insensitive equality lookup to avoid that scan."
+          },
+          "cost_microusd": 3804,
+          "decision": "patch",
+          "decision_correct": true,
+          "evidence_valid": true,
+          "expected": "patch",
+          "latency_ms": 28914,
+          "location_correct": true,
+          "outcome": "decided",
+          "patch_valid": false,
+          "resolved": false,
+          "root_cause_correct": true,
+          "tokens": 40601,
+          "tool_calls": 21,
+          "turns": 8,
+          "validation": {
+            "applies": true,
+            "changed_lines": 2,
+            "error": null,
+            "files": [
+              "shop/inventory.py"
+            ],
+            "inputs_sha256": "1c805f8b7df89385709e0a5ac25cda4bc6e822f634a3dfb3d1b5b248f9dfabf2",
+            "own_tests": "pass",
+            "protected": {
+              "failed": [
+                "check_lookup.LookupChecks.test_a_lookup_in_a_large_catalogue_is_quick",
+                "check_lookup.LookupChecks.test_a_lookup_reads_the_catalogue_through_its_index",
+                "check_lookup.LookupChecks.test_a_lookup_shows_the_stock_in_the_database",
+                "check_lookup.LookupChecks.test_an_unknown_product_is_not_found",
+                "check_lookup.LookupChecks.test_any_case_finds_the_product"
+              ],
+              "run": 15
+            },
+            "replay": {
+              "clean": false,
+              "page": true,
+              "pool_in_use_end": 0,
+              "web_errors": 246
+            },
+            "valid": false
+          }
+        },
+        "revert_last_deploy": {
+          "action": {
+            "act": "patch",
+            "calls": [],
+            "commit": "0b1e0de",
+            "confidence": 50,
+            "evidence": [
+              "ev-0170",
+              "ev-0212",
+              "ev-0255"
+            ],
+            "fault_type": "slow_query",
+            "file": "shop/inventory.py",
+            "function": "-",
+            "patch": "diff --git a/shop/inventory.py b/shop/inventory.py\nindex 146e612..ae10700 100644\n--- a/shop/inventory.py\n+++ b/shop/inventory.py\n@@ -19,10 +19,7 @@ class Inventory:\n         with self.telemetry.span(SERVICE, \"GET /stock/{sku}\", sku=sku):\n             connection = await self._connection()\n             try:\n+                return await self._read_stock(connection, sku)\n-                rows = await self._query(connection, \"SELECT stock FROM items WHERE lower(sku) = lower(?)\", (sku,))\n-                if not rows:\n-                    raise ServiceError(404, f\"unknown sku: {sku}\")\n-                return rows[0][0]\n             finally:\n                 self.pool.release(connection)\n \n",
+            "service": "inventory",
+            "summary": "rule baseline"
+          },
+          "cost_microusd": 0,
+          "decision": "patch",
+          "decision_correct": true,
+          "evidence_valid": true,
+          "expected": "patch",
+          "latency_ms": 0,
+          "location_correct": false,
+          "outcome": "decided",
+          "patch_valid": false,
+          "resolved": false,
+          "root_cause_correct": true,
+          "tokens": 0,
+          "tool_calls": 0,
+          "turns": 0,
+          "validation": {
+            "applies": true,
+            "changed_lines": 5,
+            "error": null,
+            "files": [
+              "shop/inventory.py"
+            ],
+            "inputs_sha256": "d53bb6d659fbb4d77544a88d43d95d2077cc297c2f76f3ef8c7945b51b6d52a6",
+            "own_tests": "pass",
+            "protected": {
+              "failed": [
+                "check_lookup.LookupChecks.test_a_lookup_shows_the_stock_in_the_database",
+                "check_lookup.LookupChecks.test_any_case_finds_the_product"
+              ],
+              "run": 15
+            },
+            "replay": {
+              "clean": true,
+              "page": false,
+              "pool_in_use_end": 0,
+              "web_errors": 0
+            },
+            "valid": false
+          }
+        }
+      }
+    },
+    {
+      "expected": "patch",
+      "id": "shop-app:c4:2",
+      "results": {
+        "claude-haiku-5-5": {
+          "action": {
+            "act": "patch",
+            "calls": [],
+            "commit": "0b1e0de",
+            "confidence": 82,
+            "evidence": [
+              "ev-0257",
+              "ev-0170",
+              "ev-0215",
+              "ev-0260",
+              "8a56cdd47d80e1e4459095a35d69687b"
+            ],
+            "fault_type": "slow_query",
+            "file": "shop/inventory.py",
+            "function": "Inventory.stock",
+            "patch": "--- a/shop/inventory.py\n+++ b/shop/inventory.py\n@@ -19,7 +19,7 @@ class Inventory:\n         with self.telemetry.span(SERVICE, \"GET /stock/{sku}\", sku=sku):\n             connection = await self._connection()\n             try:\n-                rows = await self._query(connection, \"SELECT stock FROM items WHERE lower(sku) = lower(?)\", (sku,))\n+                rows = await self._query(connection, \"SELECT stock FROM items WHERE sku = ?\", (sku,))\n                 if not rows:\n                     raise ServiceError(404, f\"unknown sku: {sku}\")\n                 return rows[0][0]\n",
+            "service": "inventory",
+            "summary": "Commit 0b1e0de wraps the stock lookup SQL in lower(sku), which defeats the sku index and makes each /stock call take about 1.8 s; web's 1.5 s timeout then returns 504s to /products."
+          },
+          "cost_microusd": 3371,
+          "decision": "patch",
+          "decision_correct": true,
+          "evidence_valid": true,
+          "expected": "patch",
+          "latency_ms": 12911,
+          "location_correct": true,
+          "outcome": "decided",
+          "patch_valid": false,
+          "resolved": false,
+          "root_cause_correct": true,
+          "tokens": 24235,
+          "tool_calls": 9,
+          "turns": 4,
+          "validation": {
+            "applies": true,
+            "changed_lines": 2,
+            "error": null,
+            "files": [
+              "shop/inventory.py"
+            ],
+            "inputs_sha256": "598a7f618e47f6aaf85c3a4f6108531407ab7e75f942826234eb618db2bef0e0",
+            "own_tests": "pass",
+            "protected": {
+              "failed": [
+                "check_lookup.LookupChecks.test_a_lookup_shows_the_stock_in_the_database",
+                "check_lookup.LookupChecks.test_any_case_finds_the_product"
+              ],
+              "run": 15
+            },
+            "replay": {
+              "clean": true,
+              "page": false,
+              "pool_in_use_end": 0,
+              "web_errors": 0
+            },
+            "valid": false
+          }
+        },
+        "deepest_abnormal_commit": {
+          "action": {
+            "act": "diagnose",
+            "calls": [],
+            "commit": "0b1e0de",
+            "confidence": 50,
+            "evidence": [
+              "ev-0215",
+              "ev-0260"
+            ],
+            "fault_type": "slow_query",
+            "file": "shop/inventory.py",
+            "function": "-",
+            "patch": "",
+            "service": "inventory",
+            "summary": "rule baseline"
+          },
+          "cost_microusd": 0,
+          "decision": "diagnose",
+          "decision_correct": false,
+          "evidence_valid": true,
+          "expected": "patch",
+          "latency_ms": 0,
+          "location_correct": false,
+          "outcome": "decided",
+          "patch_valid": false,
+          "resolved": false,
+          "root_cause_correct": true,
+          "tokens": 0,
+          "tool_calls": 0,
+          "turns": 0,
+          "validation": null
+        },
+        "deepseek-flash": {
+          "action": {
+            "act": "patch",
+            "calls": [],
+            "commit": "0b1e0de",
+            "confidence": 78,
+            "evidence": [
+              "ev-0260",
+              "ev-0215",
+              "0b1e0de",
+              "96e45add73a32573",
+              "8a56cdd47d80e1e4459095a35d69687b",
+              "ev-0257"
+            ],
+            "fault_type": "slow_query",
+            "file": "shop/inventory.py",
+            "function": "Inventory.stock",
+            "patch": "--- a/shop/inventory.py\n+++ b/shop/inventory.py\n@@ -19,7 +19,7 @@\n         with self.telemetry.span(SERVICE, \"GET /stock/{sku}\", sku=sku):\n             connection = await self._connection()\n             try:\n-                rows = await self._query(connection, \"SELECT stock FROM items WHERE lower(sku) = lower(?)\", (sku,))\n+                rows = await self._query(connection, \"SELECT stock FROM items WHERE sku = ? OR sku = ?\", (sku, sku.lower()))\n                 if not rows:\n                     raise ServiceError(404, f\"unknown sku: {sku}\")\n                 return rows[0][0]\n",
+            "service": "inventory",
+            "summary": "Commit 0b1e0de rewrote the stock lookup as lower(sku) = lower(?), which makes SQLite scan the whole items table instead of using the primary-key index, so db.query's per-scanned-row delay pushes inventory latency from 8 ms to 1804 ms and web's upstream calls time out (502/504). The fix keeps case-insensitive lookup but compares against the indexed sku column directly."
+          },
+          "cost_microusd": 10104,
+          "decision": "patch",
+          "decision_correct": true,
+          "evidence_valid": true,
+          "expected": "patch",
+          "latency_ms": 54541,
+          "location_correct": true,
+          "outcome": "decided",
+          "patch_valid": true,
+          "resolved": true,
+          "root_cause_correct": true,
+          "tokens": 36538,
+          "tool_calls": 15,
+          "turns": 7,
+          "validation": {
+            "applies": true,
+            "changed_lines": 2,
+            "error": null,
+            "files": [
+              "shop/inventory.py"
+            ],
+            "inputs_sha256": "beb43c2d77d25d1c66938973d949f9a8bf925ff7ef21558fc7bed9f04da65e99",
+            "own_tests": "pass",
+            "protected": {
+              "failed": [],
+              "run": 15
+            },
+            "replay": {
+              "clean": true,
+              "page": false,
+              "pool_in_use_end": 0,
+              "web_errors": 0
+            },
+            "valid": true
+          }
+        },
+        "gpt-6-luna": {
+          "action": {
+            "act": "diagnose",
+            "calls": [],
+            "commit": "0b1e0de",
+            "confidence": 96,
+            "evidence": [
+              "0b1e0de",
+              "shop/inventory.py",
+              "ev-0215",
+              "ev-0260",
+              "8a56cdd47d80e1e4459095a35d69687b"
+            ],
+            "fault_type": "code_defect",
+            "file": "shop/inventory.py",
+            "function": "Inventory.stock",
+            "patch": "",
+            "service": "inventory",
+            "summary": "The new case-insensitive stock lookup applies lower() to the indexed SKU column, forcing a table scan and making inventory requests take 1804 ms; web then times out at 1500 ms and reports errors. The evidence identifies the regression, but a safe behavior-preserving fix requires changing the schema/index or otherwise supporting case-insensitive lookup without scanning."
+          },
+          "cost_microusd": 3570,
+          "decision": "diagnose",
+          "decision_correct": false,
+          "evidence_valid": true,
+          "expected": "patch",
+          "latency_ms": 41337,
+          "location_correct": false,
+          "outcome": "decided",
+          "patch_valid": false,
+          "resolved": false,
+          "root_cause_correct": false,
+          "tokens": 37183,
+          "tool_calls": 21,
+          "turns": 8,
+          "validation": null
+        },
+        "revert_last_deploy": {
+          "action": {
+            "act": "patch",
+            "calls": [],
+            "commit": "0b1e0de",
+            "confidence": 50,
+            "evidence": [
+              "ev-0170",
+              "ev-0215",
+              "ev-0260"
+            ],
+            "fault_type": "slow_query",
+            "file": "shop/inventory.py",
+            "function": "-",
+            "patch": "diff --git a/shop/inventory.py b/shop/inventory.py\nindex 146e612..ae10700 100644\n--- a/shop/inventory.py\n+++ b/shop/inventory.py\n@@ -19,10 +19,7 @@ class Inventory:\n         with self.telemetry.span(SERVICE, \"GET /stock/{sku}\", sku=sku):\n             connection = await self._connection()\n             try:\n+                return await self._read_stock(connection, sku)\n-                rows = await self._query(connection, \"SELECT stock FROM items WHERE lower(sku) = lower(?)\", (sku,))\n-                if not rows:\n-                    raise ServiceError(404, f\"unknown sku: {sku}\")\n-                return rows[0][0]\n             finally:\n                 self.pool.release(connection)\n \n",
+            "service": "inventory",
+            "summary": "rule baseline"
+          },
+          "cost_microusd": 0,
+          "decision": "patch",
+          "decision_correct": true,
+          "evidence_valid": true,
+          "expected": "patch",
+          "latency_ms": 0,
+          "location_correct": false,
+          "outcome": "decided",
+          "patch_valid": false,
+          "resolved": false,
+          "root_cause_correct": true,
+          "tokens": 0,
+          "tool_calls": 0,
+          "turns": 0,
+          "validation": {
+            "applies": true,
+            "changed_lines": 5,
+            "error": null,
+            "files": [
+              "shop/inventory.py"
+            ],
+            "inputs_sha256": "00cb2d3401b1e0994f314ca596c6037c42baee10051b2e52253e8a2287d57582",
+            "own_tests": "pass",
+            "protected": {
+              "failed": [
+                "check_lookup.LookupChecks.test_a_lookup_shows_the_stock_in_the_database",
+                "check_lookup.LookupChecks.test_any_case_finds_the_product"
+              ],
+              "run": 15
+            },
+            "replay": {
+              "clean": true,
+              "page": false,
+              "pool_in_use_end": 0,
+              "web_errors": 0
+            },
+            "valid": false
+          }
+        }
+      }
+    },
+    {
+      "expected": "escalate",
+      "id": "shop-app:c5:1",
+      "results": {
+        "claude-haiku-5-5": {
+          "action": {
+            "act": "escalate",
+            "calls": [],
+            "commit": "bfc0fd2",
+            "confidence": 40,
+            "evidence": [
+              "ev-0690",
+              "ev-0694",
+              "ev-0636",
+              "ev-0687"
+            ],
+            "fault_type": "-",
+            "file": "shop/inventory.py",
+            "function": "-",
+            "patch": "",
+            "service": "inventory",
+            "summary": "Inventory returns 503 'database table is locked: items' from reserve and stock paths since about 703s, which propagates to orders and web; the cause is not clear from the code read so far, so a human should check the shared db layer and locking."
+          },
+          "cost_microusd": 8495,
+          "decision": "escalate",
+          "decision_correct": true,
+          "evidence_valid": true,
+          "expected": "escalate",
+          "latency_ms": 27479,
+          "location_correct": false,
+          "outcome": "decided",
+          "patch_valid": false,
+          "resolved": true,
+          "root_cause_correct": false,
+          "tokens": 67068,
+          "tool_calls": 19,
+          "turns": 8,
+          "validation": null
+        },
+        "deepest_abnormal_commit": {
+          "action": {
+            "act": "diagnose",
+            "calls": [],
+            "commit": "bfc0fd2",
+            "confidence": 50,
+            "evidence": [
+              "ev-0186",
+              "ev-0189",
+              "ev-0192",
+              "ev-0195",
+              "ev-0198",
+              "ev-0201",
+              "ev-0204",
+              "ev-0207"
+            ],
+            "fault_type": "code_defect",
+            "file": "shop/inventory.py",
+            "function": "-",
+            "patch": "",
+            "service": "inventory",
+            "summary": "rule baseline"
+          },
+          "cost_microusd": 0,
+          "decision": "diagnose",
+          "decision_correct": false,
+          "evidence_valid": true,
+          "expected": "escalate",
+          "latency_ms": 0,
+          "location_correct": false,
+          "outcome": "decided",
+          "patch_valid": false,
+          "resolved": false,
+          "root_cause_correct": false,
+          "tokens": 0,
+          "tool_calls": 0,
+          "turns": 0,
+          "validation": null
+        },
+        "deepseek-flash": {
+          "action": null,
+          "cost_microusd": 19402,
+          "decision": null,
+          "decision_correct": false,
+          "evidence_valid": false,
+          "expected": "escalate",
+          "latency_ms": 113236,
+          "location_correct": false,
+          "outcome": "model_truncated",
+          "patch_valid": false,
+          "resolved": false,
+          "root_cause_correct": false,
+          "tokens": 44943,
+          "tool_calls": 15,
+          "turns": 6,
+          "validation": null
+        },
+        "gpt-6-luna": {
+          "action": {
+            "act": "patch",
+            "calls": [],
+            "commit": "bfc0fd2",
+            "confidence": 90,
+            "evidence": [
+              "ev-0694",
+              "ev-0636",
+              "18dbb9922f094b42",
+              "bfc0fd2",
+              "shop/inventory.py"
+            ],
+            "fault_type": "code_defect",
+            "file": "shop/inventory.py",
+            "function": "Inventory.stock",
+            "patch": "--- a/shop/inventory.py\n+++ b/shop/inventory.py\n@@ -19,7 +19,7 @@ class Inventory:\n         with self.telemetry.span(SERVICE, \"GET /stock/{sku}\", sku=sku):\n             connection = await self._connection()\n             try:\n-                rows = await self._query(connection, \"SELECT stock FROM items WHERE sku = lower(?)\", (sku,))\n+                rows = await self._query(connection, \"SELECT stock FROM items WHERE lower(sku) = lower(?)\", (sku,))\n                 if not rows:\n                     raise ServiceError(404, f\"unknown sku: {sku}\")\n                 return rows[0][0]",
+            "service": "inventory",
+            "summary": "The deployed stock lookup changed case-insensitive matching into a comparison against only the lowercased input, breaking lookups for uppercase stored product codes; fix the query to normalize both sides."
+          },
+          "cost_microusd": 2629,
+          "decision": "patch",
+          "decision_correct": false,
+          "evidence_valid": false,
+          "expected": "escalate",
+          "latency_ms": 30522,
+          "location_correct": false,
+          "outcome": "decided",
+          "patch_valid": false,
+          "resolved": false,
+          "root_cause_correct": false,
+          "tokens": 26975,
+          "tool_calls": 15,
+          "turns": 6,
+          "validation": {
+            "applies": true,
+            "changed_lines": 2,
+            "error": null,
+            "files": [
+              "shop/inventory.py"
+            ],
+            "inputs_sha256": "a1997f04323c111a275e8f330bfeb99fe0d46a4815004321c57574e8fda1eeaf",
+            "own_tests": "pass",
+            "protected": {
+              "failed": [
+                "check_lookup.LookupChecks.test_a_lookup_in_a_large_catalogue_is_quick",
+                "check_lookup.LookupChecks.test_a_lookup_reads_the_catalogue_through_its_index",
+                "check_lookup.LookupChecks.test_a_lookup_shows_the_stock_in_the_database",
+                "check_lookup.LookupChecks.test_an_unknown_product_is_not_found",
+                "check_lookup.LookupChecks.test_any_case_finds_the_product"
+              ],
+              "run": 15
+            },
+            "replay": {
+              "clean": false,
+              "page": true,
+              "pool_in_use_end": 0,
+              "web_errors": 868
+            },
+            "valid": false
+          }
+        },
+        "revert_last_deploy": {
+          "action": {
+            "act": "escalate",
+            "calls": [],
+            "commit": "-",
+            "confidence": 0,
+            "evidence": [],
+            "fault_type": "-",
+            "file": "-",
+            "function": "-",
+            "patch": "",
+            "service": "-",
+            "summary": "rule baseline"
+          },
+          "cost_microusd": 0,
+          "decision": "escalate",
+          "decision_correct": true,
+          "evidence_valid": true,
+          "expected": "escalate",
+          "latency_ms": 0,
+          "location_correct": false,
+          "outcome": "decided",
+          "patch_valid": false,
+          "resolved": true,
+          "root_cause_correct": false,
+          "tokens": 0,
+          "tool_calls": 0,
+          "turns": 0,
+          "validation": null
+        }
+      }
+    },
+    {
+      "expected": "escalate",
+      "id": "shop-app:c5:2",
+      "results": {
+        "claude-haiku-5-5": {
+          "action": {
+            "act": "escalate",
+            "calls": [],
+            "commit": "-",
+            "confidence": 40,
+            "evidence": [
+              "ev-0682",
+              "ev-0679",
+              "ev-0664",
+              "ev-0684"
+            ],
+            "fault_type": "-",
+            "file": "-",
+            "function": "-",
+            "patch": "",
+            "service": "inventory",
+            "summary": "Web checkout errors trace to inventory reserve failing with 'database table is locked: items' while pool usage and pending requests stay at 0; the lock source (likely an unreset cursor in shop/db.py query or the recent lower() change) is not confirmed, so a human should check it."
+          },
+          "cost_microusd": 5958,
+          "decision": "escalate",
+          "decision_correct": true,
+          "evidence_valid": true,
+          "expected": "escalate",
+          "latency_ms": 22377,
+          "location_correct": false,
+          "outcome": "decided",
+          "patch_valid": false,
+          "resolved": true,
+          "root_cause_correct": false,
+          "tokens": 45281,
+          "tool_calls": 15,
+          "turns": 6,
+          "validation": null
+        },
+        "deepest_abnormal_commit": {
+          "action": {
+            "act": "diagnose",
+            "calls": [],
+            "commit": "bfc0fd2",
+            "confidence": 50,
+            "evidence": [
+              "ev-0183",
+              "ev-0186",
+              "ev-0188",
+              "ev-0190",
+              "ev-0193",
+              "ev-0196",
+              "ev-0199",
+              "ev-0202"
+            ],
+            "fault_type": "code_defect",
+            "file": "shop/inventory.py",
+            "function": "-",
+            "patch": "",
+            "service": "inventory",
+            "summary": "rule baseline"
+          },
+          "cost_microusd": 0,
+          "decision": "diagnose",
+          "decision_correct": false,
+          "evidence_valid": true,
+          "expected": "escalate",
+          "latency_ms": 0,
+          "location_correct": false,
+          "outcome": "decided",
+          "patch_valid": false,
+          "resolved": false,
+          "root_cause_correct": false,
+          "tokens": 0,
+          "tool_calls": 0,
+          "turns": 0,
+          "validation": null
+        },
+        "deepseek-flash": {
+          "action": null,
+          "cost_microusd": 22921,
+          "decision": null,
+          "decision_correct": false,
+          "evidence_valid": false,
+          "expected": "escalate",
+          "latency_ms": 133405,
+          "location_correct": false,
+          "outcome": "model_truncated",
+          "patch_valid": false,
+          "resolved": false,
+          "root_cause_correct": false,
+          "tokens": 54139,
+          "tool_calls": 18,
+          "turns": 7,
+          "validation": null
+        },
+        "gpt-6-luna": {
+          "action": {
+            "act": "patch",
+            "calls": [],
+            "commit": "bfc0fd2",
+            "confidence": 99,
+            "evidence": [
+              "ev-0629",
+              "e70a2073ce895097556f53ffcd4f227c",
+              "bfc0fd2",
+              "shop/inventory.py"
+            ],
+            "fault_type": "code_defect",
+            "file": "shop/inventory.py",
+            "function": "Inventory.stock",
+            "patch": "--- a/shop/inventory.py\n+++ b/shop/inventory.py\n@@ -19,7 +19,7 @@ class Inventory:\n         with self.telemetry.span(SERVICE, \"GET /stock/{sku}\", sku=sku):\n             connection = await self._connection()\n             try:\n-                rows = await self._query(connection, \"SELECT stock FROM items WHERE sku = lower(?)\", (sku,))\n+                rows = await self._query(connection, \"SELECT stock FROM items WHERE lower(sku) = lower(?)\", (sku,))\n                 if not rows:\n                     raise ServiceError(404, f\"unknown sku: {sku}\")\n                 return rows[0][0]",
+            "service": "inventory",
+            "summary": "Inventory is the deepest failing service: its deployed SKU predicate introduced a case-sensitive column comparison that contradicts the intended case-insensitive lookup, causing stock failures and cascading checkout errors."
+          },
+          "cost_microusd": 1440,
+          "decision": "patch",
+          "decision_correct": false,
+          "evidence_valid": true,
+          "expected": "escalate",
+          "latency_ms": 16911,
+          "location_correct": false,
+          "outcome": "decided",
+          "patch_valid": false,
+          "resolved": false,
+          "root_cause_correct": false,
+          "tokens": 17119,
+          "tool_calls": 12,
+          "turns": 5,
+          "validation": {
+            "applies": true,
+            "changed_lines": 2,
+            "error": null,
+            "files": [
+              "shop/inventory.py"
+            ],
+            "inputs_sha256": "cb415d338110c2308eaf1e62fb1a894ff4d8c304a08c1f2b83eef2b06c3d5a81",
+            "own_tests": "pass",
+            "protected": {
+              "failed": [
+                "check_lookup.LookupChecks.test_a_lookup_in_a_large_catalogue_is_quick",
+                "check_lookup.LookupChecks.test_a_lookup_reads_the_catalogue_through_its_index",
+                "check_lookup.LookupChecks.test_a_lookup_shows_the_stock_in_the_database",
+                "check_lookup.LookupChecks.test_an_unknown_product_is_not_found",
+                "check_lookup.LookupChecks.test_any_case_finds_the_product"
+              ],
+              "run": 15
+            },
+            "replay": {
+              "clean": false,
+              "page": true,
+              "pool_in_use_end": 0,
+              "web_errors": 912
+            },
+            "valid": false
+          }
+        },
+        "revert_last_deploy": {
+          "action": {
+            "act": "escalate",
+            "calls": [],
+            "commit": "-",
+            "confidence": 0,
+            "evidence": [],
+            "fault_type": "-",
+            "file": "-",
+            "function": "-",
+            "patch": "",
+            "service": "-",
+            "summary": "rule baseline"
+          },
+          "cost_microusd": 0,
+          "decision": "escalate",
+          "decision_correct": true,
+          "evidence_valid": true,
+          "expected": "escalate",
+          "latency_ms": 0,
+          "location_correct": false,
+          "outcome": "decided",
+          "patch_valid": false,
+          "resolved": true,
+          "root_cause_correct": false,
+          "tokens": 0,
+          "tool_calls": 0,
+          "turns": 0,
+          "validation": null
+        }
+      }
+    },
+    {
+      "expected": "dismiss",
+      "id": "shop-app:c6:1",
+      "results": {
+        "claude-haiku-5-5": {
+          "action": {
+            "act": "dismiss",
+            "calls": [],
+            "commit": "-",
+            "confidence": 60,
+            "evidence": [
+              "ev-0337",
+              "ev-0338",
+              "ev-0303",
+              "ev-0326"
+            ],
+            "fault_type": "-",
+            "file": "-",
+            "function": "-",
+            "patch": "",
+            "service": "web",
+            "summary": "Web's error rate is high because the intentional per-user checkout limit (5 per second) is throttling perf-loadtest with 503s; orders and inventory are healthy and latency is normal, so no customer-facing fault is evident."
+          },
+          "cost_microusd": 4821,
+          "decision": "dismiss",
+          "decision_correct": true,
+          "evidence_valid": true,
+          "expected": "dismiss",
+          "latency_ms": 22585,
+          "location_correct": false,
+          "outcome": "decided",
+          "patch_valid": false,
+          "resolved": true,
+          "root_cause_correct": false,
+          "tokens": 36203,
+          "tool_calls": 9,
+          "turns": 7,
+          "validation": null
+        },
+        "deepest_abnormal_commit": {
+          "action": {
+            "act": "diagnose",
+            "calls": [],
+            "commit": "bfc0fd2",
+            "confidence": 50,
+            "evidence": [
+              "ev-0186",
+              "ev-0187",
+              "ev-0188",
+              "ev-0189",
+              "ev-0190",
+              "ev-0191",
+              "ev-0192",
+              "ev-0193"
+            ],
+            "fault_type": "config_error",
+            "file": "shop/inventory.py",
+            "function": "-",
+            "patch": "",
+            "service": "web",
+            "summary": "rule baseline"
+          },
+          "cost_microusd": 0,
+          "decision": "diagnose",
+          "decision_correct": false,
+          "evidence_valid": true,
+          "expected": "dismiss",
+          "latency_ms": 0,
+          "location_correct": false,
+          "outcome": "decided",
+          "patch_valid": false,
+          "resolved": false,
+          "root_cause_correct": false,
+          "tokens": 0,
+          "tool_calls": 0,
+          "turns": 0,
+          "validation": null
+        },
+        "deepseek-flash": {
+          "action": null,
+          "cost_microusd": 19621,
+          "decision": null,
+          "decision_correct": false,
+          "evidence_valid": false,
+          "expected": "dismiss",
+          "latency_ms": 118359,
+          "location_correct": false,
+          "outcome": "invalid_output",
+          "patch_valid": false,
+          "resolved": false,
+          "root_cause_correct": false,
+          "tokens": 47288,
+          "tool_calls": 15,
+          "turns": 8,
+          "validation": null
+        },
+        "gpt-6-luna": {
+          "action": {
+            "act": "dismiss",
+            "calls": [],
+            "commit": "-",
+            "confidence": 95,
+            "evidence": [
+              "ev-0327",
+              "ev-0337",
+              "ev-0338",
+              "ev-0303",
+              "ev-0326"
+            ],
+            "fault_type": "-",
+            "file": "-",
+            "function": "-",
+            "patch": "",
+            "service": "-",
+            "summary": "The web error rate is driven by the configured checkout limit returning 503s to the perf-loadtest user; the other services are healthy, so this is expected load-test traffic rather than a service fault requiring action."
+          },
+          "cost_microusd": 2718,
+          "decision": "dismiss",
+          "decision_correct": true,
+          "evidence_valid": true,
+          "expected": "dismiss",
+          "latency_ms": 30933,
+          "location_correct": false,
+          "outcome": "decided",
+          "patch_valid": false,
+          "resolved": true,
+          "root_cause_correct": false,
+          "tokens": 29179,
+          "tool_calls": 18,
+          "turns": 7,
+          "validation": null
+        },
+        "revert_last_deploy": {
+          "action": {
+            "act": "escalate",
+            "calls": [],
+            "commit": "-",
+            "confidence": 0,
+            "evidence": [],
+            "fault_type": "-",
+            "file": "-",
+            "function": "-",
+            "patch": "",
+            "service": "-",
+            "summary": "rule baseline"
+          },
+          "cost_microusd": 0,
+          "decision": "escalate",
+          "decision_correct": false,
+          "evidence_valid": true,
+          "expected": "dismiss",
+          "latency_ms": 0,
+          "location_correct": false,
+          "outcome": "decided",
+          "patch_valid": false,
+          "resolved": false,
+          "root_cause_correct": false,
+          "tokens": 0,
+          "tool_calls": 0,
+          "turns": 0,
+          "validation": null
+        }
+      }
+    },
+    {
+      "expected": "dismiss",
+      "id": "shop-app:c6:2",
+      "results": {
+        "claude-haiku-5-5": {
+          "action": {
+            "act": "escalate",
+            "calls": [],
+            "commit": "-",
+            "confidence": 40,
+            "evidence": [
+              "ev-0321",
+              "ev-0331",
+              "ev-0299"
+            ],
+            "fault_type": "-",
+            "file": "-",
+            "function": "-",
+            "patch": "",
+            "service": "web",
+            "summary": "Web checkout 503s at about 93 percent since 660s match a checkout limit for perf-loadtest, but no code or deploy change explains it and it is unclear whether real customers are affected, so a human should check the limit and its intent."
+          },
+          "cost_microusd": 2594,
+          "decision": "escalate",
+          "decision_correct": false,
+          "evidence_valid": true,
+          "expected": "dismiss",
+          "latency_ms": 9529,
+          "location_correct": false,
+          "outcome": "decided",
+          "patch_valid": false,
+          "resolved": false,
+          "root_cause_correct": false,
+          "tokens": 20959,
+          "tool_calls": 9,
+          "turns": 5,
+          "validation": null
+        },
+        "deepest_abnormal_commit": {
+          "action": {
+            "act": "diagnose",
+            "calls": [],
+            "commit": "bfc0fd2",
+            "confidence": 50,
+            "evidence": [
+              "ev-0183",
+              "ev-0184",
+              "ev-0185",
+              "ev-0186",
+              "ev-0187",
+              "ev-0188",
+              "ev-0189",
+              "ev-0190"
+            ],
+            "fault_type": "config_error",
+            "file": "shop/inventory.py",
+            "function": "-",
+            "patch": "",
+            "service": "web",
+            "summary": "rule baseline"
+          },
+          "cost_microusd": 0,
+          "decision": "diagnose",
+          "decision_correct": false,
+          "evidence_valid": true,
+          "expected": "dismiss",
+          "latency_ms": 0,
+          "location_correct": false,
+          "outcome": "decided",
+          "patch_valid": false,
+          "resolved": false,
+          "root_cause_correct": false,
+          "tokens": 0,
+          "tool_calls": 0,
+          "turns": 0,
+          "validation": null
+        },
+        "deepseek-flash": {
+          "action": null,
+          "cost_microusd": 18714,
+          "decision": null,
+          "decision_correct": false,
+          "evidence_valid": false,
+          "expected": "dismiss",
+          "latency_ms": 110574,
+          "location_correct": false,
+          "outcome": "model_truncated",
+          "patch_valid": false,
+          "resolved": false,
+          "root_cause_correct": false,
+          "tokens": 39254,
+          "tool_calls": 18,
+          "turns": 7,
+          "validation": null
+        },
+        "gpt-6-luna": {
+          "action": {
+            "act": "dismiss",
+            "calls": [],
+            "commit": "-",
+            "confidence": 96,
+            "evidence": [
+              "ev-0321",
+              "ev-0331",
+              "ev-0299",
+              "ev-0320"
+            ],
+            "fault_type": "-",
+            "file": "-",
+            "function": "-",
+            "patch": "",
+            "service": "-",
+            "summary": "The alert is caused by the intentional per-user checkout limit: the web logs identify perf-loadtest as the limited caller, while orders and inventory show no errors or abnormal latency. No customer impact is evident, so no service change is needed."
+          },
+          "cost_microusd": 2054,
+          "decision": "dismiss",
+          "decision_correct": true,
+          "evidence_valid": true,
+          "expected": "dismiss",
+          "latency_ms": 24572,
+          "location_correct": false,
+          "outcome": "decided",
+          "patch_valid": false,
+          "resolved": true,
+          "root_cause_correct": false,
+          "tokens": 23784,
+          "tool_calls": 18,
+          "turns": 7,
+          "validation": null
+        },
+        "revert_last_deploy": {
+          "action": {
+            "act": "escalate",
+            "calls": [],
+            "commit": "-",
+            "confidence": 0,
+            "evidence": [],
+            "fault_type": "-",
+            "file": "-",
+            "function": "-",
+            "patch": "",
+            "service": "-",
+            "summary": "rule baseline"
+          },
+          "cost_microusd": 0,
+          "decision": "escalate",
+          "decision_correct": false,
+          "evidence_valid": true,
+          "expected": "dismiss",
+          "latency_ms": 0,
+          "location_correct": false,
+          "outcome": "decided",
+          "patch_valid": false,
+          "resolved": false,
+          "root_cause_correct": false,
+          "tokens": 0,
+          "tool_calls": 0,
+          "turns": 0,
+          "validation": null
+        }
+      }
+    }
+  ],
+  "investigators": {
+    "claude-haiku-5-5": {
+      "budget_exhausted": 0,
+      "cost_microusd": 51081,
+      "decision_correct": 10,
+      "dismiss_cases": 2,
+      "dismissed": 1,
+      "escalate_cases": 2,
+      "escalated": 2,
+      "evidence_valid": 12,
+      "false_dismissals": 0,
+      "false_escalations": 1,
+      "incidents": 12,
+      "invalid_evidence": 0,
+      "kind": "model",
+      "latency_ms": 209830,
+      "location_correct": 8,
+      "mean_tool_calls": 10.9,
+      "mean_turns": 5.3,
+      "model_stopped": 0,
+      "no_decision": 0,
+      "own_tests_pass": 4,
+      "patch_applies": 4,
+      "patch_cases": 8,
+      "patch_valid": 2,
+      "patches": 7,
+      "patches_where_none_needed": 0,
+      "protected_pass": 2,
+      "replay_clean": 4,
+      "resolved": 5,
+      "root_cause_correct": 8,
+      "tokens": 376613,
+      "unfinished_validations": 0
+    },
+    "deepest_abnormal_commit": {
+      "budget_exhausted": 0,
+      "cost_microusd": 0,
+      "decision_correct": 0,
+      "dismiss_cases": 2,
+      "dismissed": 0,
+      "escalate_cases": 2,
+      "escalated": 0,
+      "evidence_valid": 12,
+      "false_dismissals": 0,
+      "false_escalations": 0,
+      "incidents": 12,
+      "invalid_evidence": 0,
+      "kind": "baseline",
+      "latency_ms": 0,
+      "location_correct": 2,
+      "mean_tool_calls": 0.0,
+      "mean_turns": 0.0,
+      "model_stopped": 0,
+      "no_decision": 0,
+      "own_tests_pass": 0,
+      "patch_applies": 0,
+      "patch_cases": 8,
+      "patch_valid": 0,
+      "patches": 0,
+      "patches_where_none_needed": 0,
+      "protected_pass": 0,
+      "replay_clean": 0,
+      "resolved": 0,
+      "root_cause_correct": 8,
+      "tokens": 0,
+      "unfinished_validations": 0
+    },
+    "deepseek-flash": {
+      "budget_exhausted": 0,
+      "cost_microusd": 138621,
+      "decision_correct": 6,
+      "dismiss_cases": 2,
+      "dismissed": 0,
+      "escalate_cases": 2,
+      "escalated": 0,
+      "evidence_valid": 6,
+      "false_dismissals": 0,
+      "false_escalations": 0,
+      "incidents": 12,
+      "invalid_evidence": 0,
+      "kind": "model",
+      "latency_ms": 778191,
+      "location_correct": 6,
+      "mean_tool_calls": 13.4,
+      "mean_turns": 6.5,
+      "model_stopped": 3,
+      "no_decision": 6,
+      "own_tests_pass": 5,
+      "patch_applies": 5,
+      "patch_cases": 8,
+      "patch_valid": 5,
+      "patches": 6,
+      "patches_where_none_needed": 0,
+      "protected_pass": 5,
+      "replay_clean": 5,
+      "resolved": 5,
+      "root_cause_correct": 6,
+      "tokens": 405861,
+      "unfinished_validations": 0
+    },
+    "gpt-6-luna": {
+      "budget_exhausted": 0,
+      "cost_microusd": 28645,
+      "decision_correct": 8,
+      "dismiss_cases": 2,
+      "dismissed": 2,
+      "escalate_cases": 2,
+      "escalated": 0,
+      "evidence_valid": 11,
+      "false_dismissals": 0,
+      "false_escalations": 0,
+      "incidents": 12,
+      "invalid_evidence": 1,
+      "kind": "model",
+      "latency_ms": 272825,
+      "location_correct": 7,
+      "mean_tool_calls": 16.5,
+      "mean_turns": 6.5,
+      "model_stopped": 0,
+      "no_decision": 0,
+      "own_tests_pass": 6,
+      "patch_applies": 6,
+      "patch_cases": 8,
+      "patch_valid": 3,
+      "patches": 8,
+      "patches_where_none_needed": 2,
+      "protected_pass": 3,
+      "replay_clean": 3,
+      "resolved": 5,
+      "root_cause_correct": 7,
+      "tokens": 316581,
+      "unfinished_validations": 0
+    },
+    "revert_last_deploy": {
+      "budget_exhausted": 0,
+      "cost_microusd": 0,
+      "decision_correct": 10,
+      "dismiss_cases": 2,
+      "dismissed": 0,
+      "escalate_cases": 2,
+      "escalated": 2,
+      "evidence_valid": 12,
+      "false_dismissals": 0,
+      "false_escalations": 2,
+      "incidents": 12,
+      "invalid_evidence": 0,
+      "kind": "baseline",
+      "latency_ms": 0,
+      "location_correct": 2,
+      "mean_tool_calls": 0.0,
+      "mean_turns": 0.0,
+      "model_stopped": 0,
+      "no_decision": 0,
+      "own_tests_pass": 8,
+      "patch_applies": 8,
+      "patch_cases": 8,
+      "patch_valid": 4,
+      "patches": 8,
+      "patches_where_none_needed": 0,
+      "protected_pass": 4,
+      "replay_clean": 6,
+      "resolved": 4,
+      "root_cause_correct": 6,
+      "tokens": 0,
+      "unfinished_validations": 0
+    }
+  },
+  "meta": {
+    "cases": [
+      "leak",
+      "config",
+      "decoy",
+      "slow_query",
+      "outside_lock",
+      "load_test"
+    ],
+    "investigators": {
+      "claude-haiku-5-5": "model",
+      "deepest_abnormal_commit": "baseline",
+      "deepseek-flash": "model",
+      "gpt-6-luna": "model",
+      "revert_last_deploy": "baseline"
+    },
+    "limits": {
+      "model_ms": 600000,
+      "tokens": 200000,
+      "tool_calls": 25,
+      "turns": 15
+    },
+    "prompt_sha256": "1e6b1b5cd93cf85ec0189c8bb7a7b9813559b025af14ba220bc771479eca275b",
+    "replaykit_version": "0.3.0",
+    "schema_sha256": "b5c447f577dbb4d564390b9d11e5a0820333e63ba349359b960ca6a0c41ced6c",
+    "seeds": [
+      1,
+      2
+    ],
+    "shop_commit": "bfc0fd22cdd817db534a247849ee28869bed6adf",
+    "suite_id": "shop-app-v1",
+    "suite_sha256": "5fd389e9d860b7e28f955ae7f3fc28b0951dffb0e9dd2e767d3854dcc363655a"
+  }
+}

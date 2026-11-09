@@ -1,0 +1,617 @@
+{
+  "shop-app:c1:1": {
+    "claude-haiku-5-5": {
+      "applies": false,
+      "changed_lines": 14,
+      "error": "git apply failed: error: patch failed: shop/inventory.py:26\nerror: shop/inventory.py: patch does not apply",
+      "files": [
+        "shop/inventory.py"
+      ],
+      "inputs_sha256": "1ca80d6d7d85993680b1cb3c4146c25f033214bbd65901e4c25966a756363a75",
+      "own_tests": null,
+      "protected": null,
+      "replay": null,
+      "valid": false
+    },
+    "gpt-6-luna": {
+      "applies": false,
+      "changed_lines": 14,
+      "error": "git apply failed: error: patch failed: shop/inventory.py:24\nerror: shop/inventory.py: patch does not apply",
+      "files": [
+        "shop/inventory.py"
+      ],
+      "inputs_sha256": "7694ac1b75817443bf244034c014896e9cabdffa93296133d72682668a1a21ae",
+      "own_tests": null,
+      "protected": null,
+      "replay": null,
+      "valid": false
+    },
+    "revert_last_deploy": {
+      "applies": true,
+      "changed_lines": 20,
+      "error": null,
+      "files": [
+        "shop/inventory.py"
+      ],
+      "inputs_sha256": "f44e10467145efee58b2a12ca1daf4143f60dcddf5d7c1530f7e11bf8c71a527",
+      "own_tests": "pass",
+      "protected": {
+        "failed": [],
+        "run": 5
+      },
+      "replay": {
+        "clean": true,
+        "page": false,
+        "pool_in_use_end": 0,
+        "web_errors": 0
+      },
+      "valid": true
+    }
+  },
+  "shop-app:c1:2": {
+    "claude-haiku-5-5": {
+      "applies": false,
+      "changed_lines": 14,
+      "error": "git apply failed: error: patch failed: shop/inventory.py:24\nerror: shop/inventory.py: patch does not apply",
+      "files": [
+        "shop/inventory.py"
+      ],
+      "inputs_sha256": "a0643a38d9b5d50bd5783a6cf1e6aa9047e9c143ad04b40b68797dafe31d76fa",
+      "own_tests": null,
+      "protected": null,
+      "replay": null,
+      "valid": false
+    },
+    "deepseek-flash": {
+      "applies": false,
+      "changed_lines": 14,
+      "error": "git apply failed: error: patch failed: shop/inventory.py:24\nerror: shop/inventory.py: patch does not apply",
+      "files": [
+        "shop/inventory.py"
+      ],
+      "inputs_sha256": "a9beb23724494ad511d1fd4d8861430223fc9682e357e330a1cbfd45e1f08498",
+      "own_tests": null,
+      "protected": null,
+      "replay": null,
+      "valid": false
+    },
+    "gpt-6-luna": {
+      "applies": false,
+      "changed_lines": 14,
+      "error": "git apply failed: error: patch failed: shop/inventory.py:24\nerror: shop/inventory.py: patch does not apply",
+      "files": [
+        "shop/inventory.py"
+      ],
+      "inputs_sha256": "f13e75504902a17cf6a8305b92e98fec555bc0ce941feb5d4cac1a182eb65993",
+      "own_tests": null,
+      "protected": null,
+      "replay": null,
+      "valid": false
+    },
+    "revert_last_deploy": {
+      "applies": true,
+      "changed_lines": 20,
+      "error": null,
+      "files": [
+        "shop/inventory.py"
+      ],
+      "inputs_sha256": "6c9a76f46a7466945314862907b4d3a4d8ca4856487c152981b6673a27ad1495",
+      "own_tests": "pass",
+      "protected": {
+        "failed": [],
+        "run": 5
+      },
+      "replay": {
+        "clean": true,
+        "page": false,
+        "pool_in_use_end": 0,
+        "web_errors": 0
+      },
+      "valid": true
+    }
+  },
+  "shop-app:c2:1": {
+    "claude-haiku-5-5": {
+      "applies": true,
+      "changed_lines": 4,
+      "error": null,
+      "files": [
+        "shop/config.py"
+      ],
+      "inputs_sha256": "abccdaeb7b453ffb9808c45aa583a6c500f9dcff044e5e1a369676549a19b685",
+      "own_tests": "pass",
+      "protected": {
+        "failed": [],
+        "run": 8
+      },
+      "replay": {
+        "clean": true,
+        "page": false,
+        "pool_in_use_end": 0,
+        "web_errors": 0
+      },
+      "valid": true
+    },
+    "deepseek-flash": {
+      "applies": true,
+      "changed_lines": 4,
+      "error": null,
+      "files": [
+        "shop/config.py"
+      ],
+      "inputs_sha256": "27269ea6ad07aff6d6f09cbc83e3ec119e2fe026eaf3ca0a9659bc75e45c8022",
+      "own_tests": "pass",
+      "protected": {
+        "failed": [],
+        "run": 8
+      },
+      "replay": {
+        "clean": true,
+        "page": false,
+        "pool_in_use_end": 0,
+        "web_errors": 0
+      },
+      "valid": true
+    },
+    "revert_last_deploy": {
+      "applies": true,
+      "changed_lines": 4,
+      "error": null,
+      "files": [
+        "shop/config.py"
+      ],
+      "inputs_sha256": "8d9363dfa618588e4daaed5f8125996b30e4f7bbcafb44348d730492560ff313",
+      "own_tests": "pass",
+      "protected": {
+        "failed": [],
+        "run": 8
+      },
+      "replay": {
+        "clean": true,
+        "page": false,
+        "pool_in_use_end": 0,
+        "web_errors": 0
+      },
+      "valid": true
+    }
+  },
+  "shop-app:c2:2": {
+    "deepseek-flash": {
+      "applies": true,
+      "changed_lines": 4,
+      "error": null,
+      "files": [
+        "shop/config.py"
+      ],
+      "inputs_sha256": "847aba59ff0ca21035205077148e4d20825d4882ee9331054fa75659d893185e",
+      "own_tests": "pass",
+      "protected": {
+        "failed": [],
+        "run": 8
+      },
+      "replay": {
+        "clean": true,
+        "page": false,
+        "pool_in_use_end": 0,
+        "web_errors": 0
+      },
+      "valid": true
+    },
+    "gpt-6-luna": {
+      "applies": true,
+      "changed_lines": 4,
+      "error": null,
+      "files": [
+        "shop/config.py"
+      ],
+      "inputs_sha256": "ad824879f81252afd655ceffe2a6497ff5d214787592168cb98c14d86193a083",
+      "own_tests": "pass",
+      "protected": {
+        "failed": [],
+        "run": 8
+      },
+      "replay": {
+        "clean": true,
+        "page": false,
+        "pool_in_use_end": 0,
+        "web_errors": 0
+      },
+      "valid": true
+    },
+    "revert_last_deploy": {
+      "applies": true,
+      "changed_lines": 4,
+      "error": null,
+      "files": [
+        "shop/config.py"
+      ],
+      "inputs_sha256": "037bca3ddae968dd8facd5f9c830d8427263ebf1eaff32a7a330a0b2e165b0bf",
+      "own_tests": "pass",
+      "protected": {
+        "failed": [],
+        "run": 8
+      },
+      "replay": {
+        "clean": true,
+        "page": false,
+        "pool_in_use_end": 0,
+        "web_errors": 0
+      },
+      "valid": true
+    }
+  },
+  "shop-app:c3:1": {
+    "claude-haiku-5-5": {
+      "applies": true,
+      "changed_lines": 2,
+      "error": null,
+      "files": [
+        "shop/orders.py"
+      ],
+      "inputs_sha256": "096d71d9cf3b420d706c42c15a5693a1e1209fe7c88036f1840465c88649918d",
+      "own_tests": "pass",
+      "protected": {
+        "failed": [],
+        "run": 10
+      },
+      "replay": {
+        "clean": true,
+        "page": false,
+        "pool_in_use_end": 0,
+        "web_errors": 0
+      },
+      "valid": true
+    },
+    "deepseek-flash": {
+      "applies": true,
+      "changed_lines": 2,
+      "error": null,
+      "files": [
+        "shop/orders.py"
+      ],
+      "inputs_sha256": "7b80ee6f0898aede711c196d30017a7e41a6d11ac19fa13acd0011f3728d7670",
+      "own_tests": "pass",
+      "protected": {
+        "failed": [],
+        "run": 10
+      },
+      "replay": {
+        "clean": true,
+        "page": false,
+        "pool_in_use_end": 0,
+        "web_errors": 0
+      },
+      "valid": true
+    },
+    "gpt-6-luna": {
+      "applies": true,
+      "changed_lines": 2,
+      "error": null,
+      "files": [
+        "shop/orders.py"
+      ],
+      "inputs_sha256": "c9014e9fd8a50440141079c2dae769b465d2954e27a261f3c9c167e6ea1dc4d4",
+      "own_tests": "pass",
+      "protected": {
+        "failed": [],
+        "run": 10
+      },
+      "replay": {
+        "clean": true,
+        "page": false,
+        "pool_in_use_end": 0,
+        "web_errors": 0
+      },
+      "valid": true
+    },
+    "revert_last_deploy": {
+      "applies": true,
+      "changed_lines": 2,
+      "error": null,
+      "files": [
+        "shop/web.py"
+      ],
+      "inputs_sha256": "ed135006c6fb489e5ca0809d5479f7cdb4b58b7a7324eafa265e030ce3f75756",
+      "own_tests": "pass",
+      "protected": {
+        "failed": [
+          "check_orders.OrderChecks.test_an_oversized_order_is_refused_as_a_client_error"
+        ],
+        "run": 10
+      },
+      "replay": {
+        "clean": false,
+        "page": true,
+        "pool_in_use_end": 0,
+        "web_errors": 345
+      },
+      "valid": false
+    }
+  },
+  "shop-app:c3:2": {
+    "claude-haiku-5-5": {
+      "applies": false,
+      "changed_lines": 2,
+      "error": "git apply failed: error: patch failed: shop/orders.py:16\nerror: shop/orders.py: patch does not apply",
+      "files": [
+        "shop/orders.py"
+      ],
+      "inputs_sha256": "5db638d2790c42bc9eb61f3addc7a64176d5e9924010dd605af6d7a63b904902",
+      "own_tests": null,
+      "protected": null,
+      "replay": null,
+      "valid": false
+    },
+    "deepseek-flash": {
+      "applies": true,
+      "changed_lines": 2,
+      "error": null,
+      "files": [
+        "shop/orders.py"
+      ],
+      "inputs_sha256": "dd744bc487b145fca040c029c226052e642095db4d73695c5b65fdf6cabeec0f",
+      "own_tests": "pass",
+      "protected": {
+        "failed": [],
+        "run": 10
+      },
+      "replay": {
+        "clean": true,
+        "page": false,
+        "pool_in_use_end": 0,
+        "web_errors": 0
+      },
+      "valid": true
+    },
+    "gpt-6-luna": {
+      "applies": true,
+      "changed_lines": 2,
+      "error": null,
+      "files": [
+        "shop/orders.py"
+      ],
+      "inputs_sha256": "dd744bc487b145fca040c029c226052e642095db4d73695c5b65fdf6cabeec0f",
+      "own_tests": "pass",
+      "protected": {
+        "failed": [],
+        "run": 10
+      },
+      "replay": {
+        "clean": true,
+        "page": false,
+        "pool_in_use_end": 0,
+        "web_errors": 0
+      },
+      "valid": true
+    },
+    "revert_last_deploy": {
+      "applies": true,
+      "changed_lines": 2,
+      "error": null,
+      "files": [
+        "shop/web.py"
+      ],
+      "inputs_sha256": "62ff61a88f971fb1cdca5ac19730cb2183a3e8ea8aa894c16971f91519ded65e",
+      "own_tests": "pass",
+      "protected": {
+        "failed": [
+          "check_orders.OrderChecks.test_an_oversized_order_is_refused_as_a_client_error"
+        ],
+        "run": 10
+      },
+      "replay": {
+        "clean": false,
+        "page": true,
+        "pool_in_use_end": 0,
+        "web_errors": 330
+      },
+      "valid": false
+    }
+  },
+  "shop-app:c4:1": {
+    "claude-haiku-5-5": {
+      "applies": true,
+      "changed_lines": 5,
+      "error": null,
+      "files": [
+        "shop/inventory.py"
+      ],
+      "inputs_sha256": "37fa8f899803560399de4339158e73650ebb28bf0eafce4be30ed893e83ca23b",
+      "own_tests": "pass",
+      "protected": {
+        "failed": [
+          "check_lookup.LookupChecks.test_a_lookup_shows_the_stock_in_the_database",
+          "check_lookup.LookupChecks.test_any_case_finds_the_product"
+        ],
+        "run": 15
+      },
+      "replay": {
+        "clean": true,
+        "page": false,
+        "pool_in_use_end": 0,
+        "web_errors": 0
+      },
+      "valid": false
+    },
+    "gpt-6-luna": {
+      "applies": true,
+      "changed_lines": 2,
+      "error": null,
+      "files": [
+        "shop/inventory.py"
+      ],
+      "inputs_sha256": "1c805f8b7df89385709e0a5ac25cda4bc6e822f634a3dfb3d1b5b248f9dfabf2",
+      "own_tests": "pass",
+      "protected": {
+        "failed": [
+          "check_lookup.LookupChecks.test_a_lookup_in_a_large_catalogue_is_quick",
+          "check_lookup.LookupChecks.test_a_lookup_reads_the_catalogue_through_its_index",
+          "check_lookup.LookupChecks.test_a_lookup_shows_the_stock_in_the_database",
+          "check_lookup.LookupChecks.test_an_unknown_product_is_not_found",
+          "check_lookup.LookupChecks.test_any_case_finds_the_product"
+        ],
+        "run": 15
+      },
+      "replay": {
+        "clean": false,
+        "page": true,
+        "pool_in_use_end": 0,
+        "web_errors": 246
+      },
+      "valid": false
+    },
+    "revert_last_deploy": {
+      "applies": true,
+      "changed_lines": 5,
+      "error": null,
+      "files": [
+        "shop/inventory.py"
+      ],
+      "inputs_sha256": "d53bb6d659fbb4d77544a88d43d95d2077cc297c2f76f3ef8c7945b51b6d52a6",
+      "own_tests": "pass",
+      "protected": {
+        "failed": [
+          "check_lookup.LookupChecks.test_a_lookup_shows_the_stock_in_the_database",
+          "check_lookup.LookupChecks.test_any_case_finds_the_product"
+        ],
+        "run": 15
+      },
+      "replay": {
+        "clean": true,
+        "page": false,
+        "pool_in_use_end": 0,
+        "web_errors": 0
+      },
+      "valid": false
+    }
+  },
+  "shop-app:c4:2": {
+    "claude-haiku-5-5": {
+      "applies": true,
+      "changed_lines": 2,
+      "error": null,
+      "files": [
+        "shop/inventory.py"
+      ],
+      "inputs_sha256": "598a7f618e47f6aaf85c3a4f6108531407ab7e75f942826234eb618db2bef0e0",
+      "own_tests": "pass",
+      "protected": {
+        "failed": [
+          "check_lookup.LookupChecks.test_a_lookup_shows_the_stock_in_the_database",
+          "check_lookup.LookupChecks.test_any_case_finds_the_product"
+        ],
+        "run": 15
+      },
+      "replay": {
+        "clean": true,
+        "page": false,
+        "pool_in_use_end": 0,
+        "web_errors": 0
+      },
+      "valid": false
+    },
+    "deepseek-flash": {
+      "applies": true,
+      "changed_lines": 2,
+      "error": null,
+      "files": [
+        "shop/inventory.py"
+      ],
+      "inputs_sha256": "beb43c2d77d25d1c66938973d949f9a8bf925ff7ef21558fc7bed9f04da65e99",
+      "own_tests": "pass",
+      "protected": {
+        "failed": [],
+        "run": 15
+      },
+      "replay": {
+        "clean": true,
+        "page": false,
+        "pool_in_use_end": 0,
+        "web_errors": 0
+      },
+      "valid": true
+    },
+    "revert_last_deploy": {
+      "applies": true,
+      "changed_lines": 5,
+      "error": null,
+      "files": [
+        "shop/inventory.py"
+      ],
+      "inputs_sha256": "00cb2d3401b1e0994f314ca596c6037c42baee10051b2e52253e8a2287d57582",
+      "own_tests": "pass",
+      "protected": {
+        "failed": [
+          "check_lookup.LookupChecks.test_a_lookup_shows_the_stock_in_the_database",
+          "check_lookup.LookupChecks.test_any_case_finds_the_product"
+        ],
+        "run": 15
+      },
+      "replay": {
+        "clean": true,
+        "page": false,
+        "pool_in_use_end": 0,
+        "web_errors": 0
+      },
+      "valid": false
+    }
+  },
+  "shop-app:c5:1": {
+    "gpt-6-luna": {
+      "applies": true,
+      "changed_lines": 2,
+      "error": null,
+      "files": [
+        "shop/inventory.py"
+      ],
+      "inputs_sha256": "a1997f04323c111a275e8f330bfeb99fe0d46a4815004321c57574e8fda1eeaf",
+      "own_tests": "pass",
+      "protected": {
+        "failed": [
+          "check_lookup.LookupChecks.test_a_lookup_in_a_large_catalogue_is_quick",
+          "check_lookup.LookupChecks.test_a_lookup_reads_the_catalogue_through_its_index",
+          "check_lookup.LookupChecks.test_a_lookup_shows_the_stock_in_the_database",
+          "check_lookup.LookupChecks.test_an_unknown_product_is_not_found",
+          "check_lookup.LookupChecks.test_any_case_finds_the_product"
+        ],
+        "run": 15
+      },
+      "replay": {
+        "clean": false,
+        "page": true,
+        "pool_in_use_end": 0,
+        "web_errors": 868
+      },
+      "valid": false
+    }
+  },
+  "shop-app:c5:2": {
+    "gpt-6-luna": {
+      "applies": true,
+      "changed_lines": 2,
+      "error": null,
+      "files": [
+        "shop/inventory.py"
+      ],
+      "inputs_sha256": "cb415d338110c2308eaf1e62fb1a894ff4d8c304a08c1f2b83eef2b06c3d5a81",
+      "own_tests": "pass",
+      "protected": {
+        "failed": [
+          "check_lookup.LookupChecks.test_a_lookup_in_a_large_catalogue_is_quick",
+          "check_lookup.LookupChecks.test_a_lookup_reads_the_catalogue_through_its_index",
+          "check_lookup.LookupChecks.test_a_lookup_shows_the_stock_in_the_database",
+          "check_lookup.LookupChecks.test_an_unknown_product_is_not_found",
+          "check_lookup.LookupChecks.test_any_case_finds_the_product"
+        ],
+        "run": 15
+      },
+      "replay": {
+        "clean": false,
+        "page": true,
+        "pool_in_use_end": 0,
+        "web_errors": 912
+      },
+      "valid": false
+    }
+  }
+}

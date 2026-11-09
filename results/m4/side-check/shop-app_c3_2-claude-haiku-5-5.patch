@@ -1,0 +1,9 @@
+--- a/shop/orders.py
++++ b/shop/orders.py
+@@ -16,2 +16,2 @@
+             if quantity > config.MAX_ORDER_ITEMS:
+-                raise ValueError(f"at most {config.MAX_ORDER_ITEMS} items per order")
++                raise ServiceError(400, f"at most {config.MAX_ORDER_ITEMS} items per order")
+             try:
+                 await call(self.runtime, self.telemetry, SERVICE, "inventory", "POST /reserve",
+                            self.inventory.reserve, sku, quantity)
