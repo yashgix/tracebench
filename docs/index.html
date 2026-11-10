@@ -62,6 +62,7 @@ h1 .sub { display: block; margin-top: 0.4rem; font-size: var(--step-3); font-wei
 .meta { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 1.25rem; font-size: var(--step-0); color: var(--muted); }
 .meta b { color: var(--ink); font-weight: 600; }
 .status { display: inline-flex; align-items: center; gap: 0.45rem; background: #fff; color: var(--ink); padding: 0.25rem 0.75rem; box-shadow: inset 0 0 0 1px #dcdbfb; border-radius: 999px; font-weight: 500; }
+.meta .code { color: var(--accent-ink); font-weight: 600; }
 .status::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
 
 /* Incident trace */
@@ -181,6 +182,7 @@ footer .name { color: var(--ink); font-weight: 600; }
     <p class="lede">I built a small online shop with three services and a real git history, then set up six incidents in it. Each one fires a page. Three low-cost AI models took the pages. They read the logs, traces and code, decided what to do and wrote the fix. Every fix was then checked by tests the model never saw and by replaying the same traffic.</p>
     <div class="meta">
       <span class="status">Independent project</span>
+      <a class="code" href="https://github.com/yashgix/tracebench">Code on GitHub</a>
       <span><b>Yash Gupta</b></span>
     </div>
   </div>
